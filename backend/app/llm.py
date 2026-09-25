@@ -132,9 +132,9 @@ def system_prompt(task: str, s: dict, context: str = "", target: str = "", topic
                                 extension=" Finish with ## Closing-half extensions (2-3 distinct ideas)." if s.get("format") == "bp" else "")
 
 
-async def stream(messages: list[dict], s: dict) -> AsyncIterator[str]:
-    resp = await litellm.acompletion(model=s["llm_model"], messages=messages, stream=True,
-                                     temperature=float(s["llm_temperature"]), max_tokens=int(s["llm_max_tokens"]),
+async def stream(messages: list[dict], s: dict, **kw) -> AsyncIterator[str]:
+    kw = {"temperature": float(s["llm_temperature"]), "max_tokens": int(s["llm_max_tokens"]), **kw}
+    resp = await litellm.acompletion(model=s["llm_model"], messages=messages, stream=True, **kw,
                                      **_creds(s, s["llm_model"], s["llm_api_base"]))
     async for chunk in resp:
         if delta := chunk.choices[0].delta.content:
