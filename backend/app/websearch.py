@@ -182,13 +182,29 @@ async def brave(client: httpx.AsyncClient, q: str, key: str) -> list[dict]:
             for x in r.json().get("web", {}).get("results", [])]
 
 
+async def serper(client: httpx.AsyncClient, q: str, key: str) -> list[dict]:
+    """Google results via serper.dev, with the user's own key."""
+    r = await client.post("https://google.serper.dev/search", json={"q": q, "num": 20}, headers={"X-API-KEY": key})
+    if r.status_code in (401, 403):
+        raise ValueError("Serper rejected the API key. Check it in Settings → Web Research.")
+    if r.status_code == 429:
+        raise ValueError("Serper rate limit or credits exhausted. Check your plan at serper.dev.")
+    r.raise_for_status()
+    return [{"url": x["link"], "title": _clean(x.get("title", "")), "snippet": _clean(x.get("snippet", ""))}
+            for x in r.json().get("organic", []) if x.get("link", "").startswith("http")]
+
+
 async def search(client: httpx.AsyncClient, q: str, s: dict, gate: asyncio.Semaphore) -> list[dict]:
-    use_brave = s.get("web_search_provider") == "brave" and s.get("web_search_key")
-    key = f"search:{'brave' if use_brave else 'ddg'}:{q}"
+    provider = s.get("web_search_provider")
+    if provider == "serper" and not s.get("serper_key"):
+        raise ValueError("Google (Serper) needs your own API key. Add it in Settings → Web Research.")
+    use_brave = provider == "brave" and s.get("web_search_key")
+    name = "serper" if provider == "serper" else "brave" if use_brave else "ddg"
+    key = f"search:{name}:{q}"
     if (hit := cache_get(key, SEARCH_TTL)) is not None:
         return hit
     async with gate:
-        out = await (brave(client, q, s["web_search_key"]) if use_brave else ddg(client, q))
+        out = await (serper(client, q, s["serper_key"]) if name == "serper" else brave(client, q, s["web_search_key"]) if use_brave else ddg(client, q))
     cache_set(key, out)
     return out
 

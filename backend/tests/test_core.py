@@ -70,4 +70,19 @@ assert w.parse_queries('Sure:\n["a b c", "d e"]') == ["a b c", "d e"] and w.pars
 ps = [{"url": f"u{i % 3}", "text": str(i)} for i in range(9)]
 picked = w.select(ps, [[9 - i for i in range(9)], [i for i in range(9)]], ["Prop", "Opp"], 6, per_url=2)
 assert [p["angle"] for p in picked] == ["Prop", "Opp"] * 3 and len({p["text"] for p in picked}) == 6
+# serper: own key required, parsed from Google organic results, key masked and hidden from guests
+import asyncio, httpx
+try:
+    asyncio.run(w.search(None, "q", {"web_search_provider": "serper", "serper_key": ""}, asyncio.Semaphore(1))); raise AssertionError
+except ValueError as e:
+    assert "API key" in str(e)
+fake = httpx.AsyncClient(transport=httpx.MockTransport(lambda req: httpx.Response(200, json={"organic": [
+    {"title": "<b>UN</b> report", "link": "https://news.un.org/x", "snippet": "zoos"}, {"title": "bad", "link": "javascript:x"}]})
+    if req.headers["X-API-KEY"] == "k" and req.url.host == "google.serper.dev" else httpx.Response(403)))
+assert asyncio.run(w.serper(fake, "zoos", "k")) == [{"url": "https://news.un.org/x", "title": "UN report", "snippet": "zoos"}]
+try:
+    asyncio.run(w.serper(fake, "zoos", "wrong")); raise AssertionError
+except ValueError as e:
+    assert "rejected" in str(e)
+assert db.mask({"serper_key": "abcdef123456"})["serper_key"] == "••••3456" and "serper_key" in db.SECRET_KEYS
 print("ok")

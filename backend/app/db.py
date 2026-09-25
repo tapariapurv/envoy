@@ -66,10 +66,10 @@ DEFAULT_SETTINGS = {
     # RAG
     "rag_chunk_size": 1200, "rag_chunk_overlap": 200, "rag_top_k": 6,
     # Web research
-    "web_search_provider": "duckduckgo", "web_search_key": "",
+    "web_search_provider": "duckduckgo", "web_search_key": "", "serper_key": "",
     "trusted_use_default": True, "trusted_custom": "",
 }
-SECRET_KEYS = {"llm_api_key", "web_search_key"}
+SECRET_KEYS = {"llm_api_key", "web_search_key", "serper_key"}
 
 PREAMBULATORY = ["Acknowledging", "Affirming", "Alarmed by", "Approving", "Aware of", "Bearing in mind",
     "Believing", "Confident", "Congratulating", "Convinced", "Declaring", "Deeply concerned",

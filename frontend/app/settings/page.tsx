@@ -173,8 +173,10 @@ export default function SettingsPage() {
               <select value={s.web_search_provider} onChange={(e) => set({ web_search_provider: e.target.value })} className="input">
                 <option value="duckduckgo">DuckDuckGo (free, no key)</option>
                 <option value="brave">Brave Search API (more reliable; free key at brave.com/search/api)</option>
+                <option value="serper">Google via Serper (your own key from serper.dev)</option>
               </select>
             </Field>
+            {s.web_search_provider === "serper" && <Field label="Serper API key" hint="Required for Google results. Get one at serper.dev; stored only in your local database and never shared with teammates."><Text k="serper_key" type="password" placeholder="Your Serper key" /></Field>}
             {s.web_search_provider === "brave" && <Field label="Brave Search API key" hint="Stored only in your local database."><Text k="web_search_key" type="password" placeholder="BSA…" /></Field>}
             <Field label="Built-in trusted sources" hint={builtin ? `${builtin.length} domains & rules` : ""}>
               <Toggle k="trusted_use_default" label="Use Envoy's list: UN system, governments (.gov, .int…), universities, journals, think tanks, NGOs and major news outlets" />
