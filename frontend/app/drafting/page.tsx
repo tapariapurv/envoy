@@ -1,15 +1,18 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, ChevronDown, Copy, FileDown, FileText, Languages, ListChecks, Plus, Sparkles, Square, Trash2, Wand2, X } from "lucide-react";
+import { Check, ChevronDown, Copy, FileDown, FileText, Hammer, Languages, ListChecks, Plus, Quote, Scale, Sparkles, Square, Trash2, Wand2, X } from "lucide-react";
 import Paper from "@/components/Paper";
 import { ErrorNote, Markdown, PageHeader, Thinking, copy, toast } from "@/components/ui";
 import { api, apiFetch, fmtTime, friendly, useAI, words, type AITask, type Draft } from "@/lib/api";
+import { EVIDENCE_FORMATS } from "@/lib/debate";
 import { useSettings } from "@/lib/settings";
+import { useWorkspace } from "@/lib/workspace";
 
 type Sel = { start: number; end: number } | null;
 
 export default function Drafting() {
   const { s } = useSettings();
+  const debate = useWorkspace().ws?.kind === "debate"; // Case Builder: same editor, debate tools, plain Markdown preview
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [cur, setCur] = useState<Draft | null>(null);
   const [saved, setSaved] = useState(true);
@@ -39,10 +42,10 @@ export default function Drafting() {
     if (booted.current) return;
     booted.current = true;
     api<Draft[]>("/api/drafts").then(async (d) => {
-      if (!d.length) d = [await api<Draft>("/api/drafts", "POST", { title: "Position Paper", content: "" })];
+      if (!d.length) d = [await api<Draft>("/api/drafts", "POST", { title: debate ? "Case" : "Position Paper", content: "" })];
       setDrafts(d); setCur(d[0]);
     }).catch(() => {});
-  }, []);
+  }, [debate]);
 
   // Flush unsaved edits if the tab closes inside the autosave window (keepalive caps bodies at 64 KB).
   const unsaved = useRef<Draft | null>(null);
@@ -111,14 +114,14 @@ export default function Drafting() {
     setExporting(true);
     try {
       let markdown = cur.content;
-      if (polishFirst) {
+      if (polishFirst && !debate) {
         // AI tidies structure first; the result also lands in the AI tab so it can be applied to the draft.
         setTarget(null); setTab("ai"); setLastTask("polish");
         const r = await ai.run("polish", { text: markdown });
         if (!r.text.trim()) return;
         markdown = r.text;
       } else setTab("preview");
-      const name = cur.title.replace(/[^\w\- ]+/g, "").trim() || "Position Paper";
+      const name = cur.title.replace(/[^\w\- ]+/g, "").trim() || (debate ? "Case" : "Position Paper");
       let res: Response;
       if (kind === "pdf") {
         await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); // let the paper render
@@ -150,7 +153,9 @@ export default function Drafting() {
     <div
       onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === "s" && cur) { e.preventDefault(); clearTimeout(saveTimer.current); persist(cur).then(() => toast("Saved")); } }}
     >
-      <PageHeader title="Drafting Studio" sub="Split-screen Markdown with AI tools that act on your selection — or the whole draft if nothing is selected.">
+      <PageHeader title={debate ? "Case Builder" : "Drafting Studio"} sub={debate
+        ? "Build arguments as claim → warrant → impact, weigh them, and cut evidence. AI acts on your selection, or the whole case."
+        : "Split-screen Markdown with AI tools that act on your selection — or the whole draft if nothing is selected."}>
         <select value={cur?.id ?? ""} onChange={(e) => switchTo(Number(e.target.value))} className="input w-56" aria-label="Choose draft">
           {drafts.map((d) => <option key={d.id} value={d.id}>{d.title}</option>)}
         </select>
@@ -161,16 +166,17 @@ export default function Drafting() {
             <FileDown className="size-4" /> {exporting ? "Exporting…" : "Export"} <ChevronDown className="size-3.5 transition group-open:rotate-180" />
           </summary>
           <div className="card rise absolute right-0 z-30 mt-2 w-72 p-2" onClick={(e) => { if ((e.target as HTMLElement).closest("button") && menu.current) menu.current.open = false; }}>
-            {([["pdf", "PDF", "Identical to the preview"], ["envoy", "Word document", "Editable .docx styled like the preview"],
+            {(debate ? [["envoy", "Word document", "Editable .docx of your case"], ["conference", "Word · plain", "Times New Roman 12, plain"]] as const
+              : [["pdf", "PDF", "Identical to the preview"], ["envoy", "Word document", "Editable .docx styled like the preview"],
               ["conference", "Word · conference format", "Times New Roman 12, justified, plain"]] as const).map(([k, t, d]) => (
               <button key={k} onClick={() => exportPaper(k)} className="flex w-full flex-col items-start rounded-lg px-3 py-2 text-left hover:bg-subtle">
                 <span className="text-sm font-medium">{t}</span><span className="text-xs text-muted">{d}</span>
               </button>
             ))}
-            <label className="mt-1 flex cursor-pointer items-start gap-2 border-t border-line px-3 pb-1 pt-2.5 text-xs text-muted">
+            {!debate && <label className="mt-1 flex cursor-pointer items-start gap-2 border-t border-line px-3 pb-1 pt-2.5 text-xs text-muted">
               <input type="checkbox" checked={polishFirst} onChange={(e) => setPolishFirst(e.target.checked)} className="mt-0.5 accent-[var(--accent)]" />
               <span><b className="text-fg">AI-polish layout first.</b> Fixes sections, proposals and the key quote without rewriting your content.</span>
-            </label>
+            </label>}
           </div>
         </details>
       </PageHeader>
@@ -178,9 +184,19 @@ export default function Drafting() {
       {cur && (
         <>
           <div className="card mb-3 flex flex-wrap items-center gap-2 p-2">
-            <button onClick={() => run("tone")} disabled={ai.busy} className="btn-ghost"><Languages className="size-4" /> Diplomatic tone</button>
-            <button onClick={() => run("polish")} disabled={ai.busy} className="btn-ghost" title="Restructure into the position paper layout without rewriting"><Wand2 className="size-4" /> Auto-format</button>
-            <button onClick={() => run("format")} disabled={ai.busy} className="btn-ghost" title="Turn rough notes into a full, persuasive position paper"><ListChecks className="size-4" /> Write paper from notes</button>
+            {debate ? (
+              <>
+                <button onClick={() => run("case")} disabled={ai.busy} className="btn-ghost" title="Turn an idea into claim, warrants, impact, weighing and pre-empted responses"><Hammer className="size-4" /> Build argument</button>
+                <button onClick={() => run("weigh")} disabled={ai.busy} className="btn-ghost" title="Compare arguments on magnitude, probability, timeframe…"><Scale className="size-4" /> Weigh</button>
+                {EVIDENCE_FORMATS.includes(s.format) && <button onClick={() => run("card")} disabled={ai.busy} className="btn-ghost" title="Cut verbatim evidence cards for the selected claim from your Research Hub"><Quote className="size-4" /> Cut card</button>}
+              </>
+            ) : (
+              <>
+                <button onClick={() => run("tone")} disabled={ai.busy} className="btn-ghost"><Languages className="size-4" /> Diplomatic tone</button>
+                <button onClick={() => run("polish")} disabled={ai.busy} className="btn-ghost" title="Restructure into the position paper layout without rewriting"><Wand2 className="size-4" /> Auto-format</button>
+                <button onClick={() => run("format")} disabled={ai.busy} className="btn-ghost" title="Turn rough notes into a full, persuasive position paper"><ListChecks className="size-4" /> Write paper from notes</button>
+              </>
+            )}
             <div className="mx-1 hidden h-5 w-px bg-line sm:block" />
             <form onSubmit={(e) => { e.preventDefault(); run("assist"); }} className="flex min-w-60 flex-1 items-center gap-2">
               <input value={instr} onChange={(e) => setInstr(e.target.value)} placeholder="Ask AI: “make this more persuasive”, “shorten to 60 seconds”…" className="input" />
@@ -195,7 +211,7 @@ export default function Drafting() {
                 ref={ta}
                 value={cur.content}
                 onChange={(e) => edit({ content: e.target.value })}
-                placeholder={"Paste rough notes and press “Write paper from notes”,\nor write in Markdown and press “Auto-format”.\n\n**Committee:** UNEP\n**Topic:** …\n\n## Background\n…"}
+                placeholder={debate ? "Write an argument idea, select it and press “Build argument”.\n\n## Argument 1: …\n**Claim:** …\n**Warrant:** …\n**Impact:** …" : "Paste rough notes and press “Write paper from notes”,\nor write in Markdown and press “Auto-format”.\n\n**Committee:** UNEP\n**Topic:** …\n\n## Background\n…"}
                 spellCheck
                 className="flex-1 resize-none bg-transparent px-5 py-4 font-mono text-[13.5px] leading-relaxed outline-none"
               />
@@ -230,7 +246,7 @@ export default function Drafting() {
               </div>
               <div className="flex-1 overflow-auto px-6 py-5">
                 {tab === "preview" ? (
-                  cur.content ? <Paper text={cur.content} wpm={s.wpm} profile={profile} /> : <p className="text-sm text-muted">Nothing to preview yet.</p>
+                  cur.content ? (debate ? <Markdown text={cur.content} /> : <Paper text={cur.content} wpm={s.wpm} profile={profile} />) : <p className="text-sm text-muted">Nothing to preview yet.</p>
                 ) : (
                   <>
                     <ErrorNote msg={ai.error} />

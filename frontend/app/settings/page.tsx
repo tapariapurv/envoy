@@ -3,9 +3,11 @@ import { useEffect, useState } from "react";
 import { Check, Cloud, Cpu, Loader2, RefreshCw } from "lucide-react";
 import { ErrorNote, PageHeader, toast } from "@/components/ui";
 import { api, download, useAI } from "@/lib/api";
+import { FORMATS, fmt } from "@/lib/debate";
 import { useSettings, type Settings } from "@/lib/settings";
+import { useWorkspace } from "@/lib/workspace";
 
-const SECTIONS = [["profile", "Delegation"], ["appearance", "Appearance"], ["timers", "Timers"], ["prompter", "Teleprompter"], ["ai", "AI Engine"], ["rag", "Research & RAG"], ["data", "Data"]];
+const SECTIONS = [["profile", "Profile"], ["appearance", "Appearance"], ["timers", "Timers"], ["prompter", "Teleprompter"], ["ai", "AI Engine"], ["rag", "Research & RAG"], ["data", "Data"]];
 const THEMES = [["system", "System", "#f7f6f3", "#111110"], ["light", "Light", "#f7f6f3", "#ffffff"], ["dark", "Dark", "#111110", "#191918"], ["midnight", "Midnight", "#0b1020", "#111830"], ["sepia", "Sepia", "#f3ecdf", "#fbf6ec"]];
 const ACCENTS = { indigo: "#4f46e5", violet: "#7c3aed", sky: "#0284c7", emerald: "#059669", amber: "#d97706", rose: "#e11d48", slate: "#475569" };
 const PROVIDERS: Record<string, { label: string; model: string; base: string; key: boolean }> = {
@@ -18,6 +20,7 @@ const PROVIDERS: Record<string, { label: string; model: string; base: string; ke
 
 export default function SettingsPage() {
   const { s, set, replace, status, offline } = useSettings();
+  const debate = useWorkspace().ws?.kind === "debate";
   const [models, setModels] = useState<string[] | null>(null);
   const [reindexing, setReindexing] = useState(false);
   const test = useAI();
@@ -44,11 +47,29 @@ export default function SettingsPage() {
         </nav>
 
         <div className="flex max-w-3xl flex-col gap-6">
-          <Section id="profile" title="Delegation" desc="Saved to the current workspace and used as context by every AI tool. Each conference workspace keeps its own.">
-            <Field label="Country / delegation"><Text k="delegate_country" placeholder="e.g. Republic of Kenya" /></Field>
-            <Field label="Committee"><Text k="committee" placeholder="e.g. UNEP, DISEC, Security Council" /></Field>
-            <Field label="Topic"><Text k="topic" placeholder="e.g. Plastic pollution in marine environments" /></Field>
-          </Section>
+          {debate ? (
+            <Section id="profile" title="Team" desc="Saved to the current workspace and used as context by every AI tool. Each tournament workspace keeps its own.">
+              <Field label="Format">
+                <select value={s.format || "bp"} onChange={(e) => set({ format: e.target.value, side: "" })} className="input">
+                  {Object.entries(FORMATS).map(([id, f]) => <option key={id} value={id}>{f.name}</option>)}
+                </select>
+              </Field>
+              <Field label="Team"><Text k="team" placeholder="e.g. Team Canada A" /></Field>
+              <Field label="Side">
+                <select value={s.side} onChange={(e) => set({ side: e.target.value })} className="input">
+                  <option value="">Not decided yet</option>
+                  {fmt(s.format).sides.map((x) => <option key={x}>{x}</option>)}
+                </select>
+              </Field>
+              <Field label="Motion"><Text k="topic" placeholder="e.g. This House would ban zoos" /></Field>
+            </Section>
+          ) : (
+            <Section id="profile" title="Delegation" desc="Saved to the current workspace and used as context by every AI tool. Each conference workspace keeps its own.">
+              <Field label="Country / delegation"><Text k="delegate_country" placeholder="e.g. Republic of Kenya" /></Field>
+              <Field label="Committee"><Text k="committee" placeholder="e.g. UNEP, DISEC, Security Council" /></Field>
+              <Field label="Topic"><Text k="topic" placeholder="e.g. Plastic pollution in marine environments" /></Field>
+            </Section>
+          )}
 
           <Section id="appearance" title="Appearance">
             <Field label="Theme">

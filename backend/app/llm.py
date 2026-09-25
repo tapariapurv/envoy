@@ -39,7 +39,7 @@ One short paragraph that closes on cooperation and restates the key commitment.
 Rules: no H1 heading, no preamble or closing remarks, no emoji, keep [n] citations exactly as written."""
 
 PROMPTS = {
-    "chat": ("You are Envoy, a research assistant for a Model UN delegate{who}. Answer using ONLY the numbered sources "
+    "chat": ("You are Envoy, a research assistant for a {role}{who}. Answer using ONLY the numbered sources "
              "below. " + CITE + " If the sources do not contain the answer, say so plainly.\n\nSOURCES:\n{context}"),
     "tone": ("You are a senior diplomat. Rewrite the user's text in a formal, measured, diplomatic register suitable for "
              "a UN committee floor: courteous, precise, non-inflammatory, third-person where appropriate. Preserve every "
@@ -53,19 +53,53 @@ PROMPTS = {
                "facts and citations; you may only move text into the right section, split walls of text into "
                "paragraphs, fix heading levels, turn proposals into the numbered list format, choose the key message "
                "quote from the author's own words, and bold a few key terms. " + PAPER_TEMPLATE),
-    "assist": ("You are an expert Model UN speechwriter and editor{who}. Apply the user's instruction to the text. "
+    "assist": ("You are an expert {role} speechwriter and editor{who}.{profile} Apply the user's instruction to the text. "
                "Return ONLY the resulting text in Markdown."),
     "counter": ("You simulate the delegation of {target} in a Model UN committee{on}. The user represents {country}. "
                 "Produce the 5 strongest counter-arguments {target} would raise against the user's position. For each: "
                 "### a short title, **Argument** (as {target} would say it on the floor), **Underlying interest** "
                 "(the real national motive), **Pressure point** (where the user's position is weakest), and "
                 "**Suggested response** for the user. Stay faithful to {target}'s real-world foreign policy. Markdown only."),
-    "rebut": ("You are a fact-checker preparing rebuttals for a Model UN delegate{who}. For each claim in the opponent's "
+    "rebut": ("You are a fact-checker preparing rebuttals for a {role}{who}. For each claim in the opponent's "
               "argument, find factual counter-evidence in the numbered sources. " + CITE + " Format: ### Claim, then "
               "**Rebuttal** with citations. If the sources contain nothing relevant for a claim, write 'No local "
               "evidence found - research further.'\n\nSOURCES:\n{context}"),
+    # ---- debate ----
+    "breakdown": ("You are an elite {fmt} coach prepping a team{who} during prep time.{profile} Break down the motion the "
+                  "user gives. Sections: ## Definitions & model (a reasonable, concrete setup), ## Burdens (for each side), "
+                  "## Key stakeholders, ## Main clashes, ## Best arguments (3 per side, each as Claim → Warrant → Impact), "
+                  "## Their best case and how to beat it.{extension} Concrete and punchy, no filler, no invented statistics. "
+                  "Markdown only."),
+    "case": ("You are a championship {fmt} debater{who}.{profile} Turn the user's idea into a complete argument: "
+             "### a short title, **Claim**, **Warrants** (the mechanism: why it is true, step by step), **Impact** (who is "
+             "affected, how much, why it matters most), **Weighing** (why it outweighs the likely response), and "
+             "**Pre-empted responses** with answers. Never invent statistics - write [evidence needed]. Markdown only."),
+    "weigh": ("You are a {fmt} adjudicator coaching a team{who}.{profile} Compare the arguments or clash the user gives on "
+              "magnitude, probability, timeframe, reversibility and scope. Say which side currently wins and why, then write "
+              "a 30-second weighing passage the user can say aloud. Markdown only."),
+    "spar": ("You are a top {fmt} debater speaking for {target}, and you argue that side of the motion.{motion_on} "
+             "The user's team{who} gives you their case. Stay on {target}'s side throughout and deliver the strongest speech "
+             "against their case, as spoken text of about 500 words: signpost, rebut each of their arguments at "
+             "its weakest link (mechanism, impact or weighing), then add one constructive argument of your own. Finish "
+             "with a short list '## Where you were weakest' addressed to the user. Markdown only."),
+    "poi": ("You are a sharp {fmt} debater.{motion_on} Write 6 Points of Information / cross-examination questions against "
+            "the speech or case the user gives: each under 20 words, pointed, and followed by *(targets: the weakness)*. "
+            "Then give the best one-line answer the speaker could give to each. Markdown only."),
+    "flowcheck": ("You are an experienced {fmt} judge reading a debater's flow{who}.{profile} Speeches are listed in order; "
+                  "rows line up responses to the same argument; [DROPPED] marks arguments flagged as unanswered. Output "
+                  "## Dropped or under-answered (whose, and why it matters), ## Who is winning each clash, and ## What the "
+                  "next speaker must do (a prioritised checklist). Markdown only."),
+    "drill": ("You are a {fmt} debater.{motion_on} Give ONE strong argument for {target}, as 3-4 spoken sentences with a "
+              "clear mechanism and impact, for the user to rebut. No preamble, no heading."),
+    "card": ("You cut evidence cards for a {fmt} debater{who}. For the claim the user gives, find passages in the numbered "
+             "sources that prove it. For each card: ### Tag (one line: what the card proves), then *Cite:* source name [n], "
+             "then the passage quoted VERBATIM as a blockquote with the key warrant in **bold**. Never paraphrase inside a "
+             "quote and never invent sources. If nothing supports the claim, say so and suggest what to search for."
+             "\n\nSOURCES:\n{context}"),
 }
-RAG_TASKS = {"chat", "rebut"}
+RAG_TASKS = {"chat", "rebut", "card"}
+FORMAT_NAMES = {"bp": "British Parliamentary", "wsdc": "World Schools", "ap": "Asian Parliamentary",
+                "pf": "Public Forum", "ld": "Lincoln-Douglas", "policy": "Policy"}
 
 
 def _creds(s: dict, model: str, base: str) -> dict:
@@ -79,13 +113,23 @@ def _creds(s: dict, model: str, base: str) -> dict:
 
 def system_prompt(task: str, s: dict, context: str = "", target: str = "", topic: str = "") -> str:
     country, committee = s["delegate_country"], s["committee"]
-    who = f" representing {country}" if country else ""
-    who += f" in {committee}" if committee else ""
     topic = topic or s["topic"]
-    profile = " ".join(f"{k}: {v}." for k, v in (("Country", country), ("Committee", committee), ("Topic", topic)) if v)
-    profile = f" Delegate profile - {profile}" if profile else ""
-    return PROMPTS[task].format(who=who, context=context, target=target or "the opposing delegation", profile=profile,
-                                country=country or "the user's country", on=f" on '{topic}'" if topic else "")
+    fmt = FORMAT_NAMES.get(s.get("format", ""), "competitive debate")
+    if s.get("kind") == "debate":
+        role, side = f"{fmt} debater", s.get("side", "")
+        who = f" on {side}" if side else ""
+        profile = " ".join(f"{k}: {v}." for k, v in (("Format", fmt), ("Motion", topic), ("Side", side)) if v)
+        profile = f" Team profile - {profile}" if profile else ""
+    else:
+        role = "Model UN delegate"
+        who = f" representing {country}" if country else ""
+        who += f" in {committee}" if committee else ""
+        profile = " ".join(f"{k}: {v}." for k, v in (("Country", country), ("Committee", committee), ("Topic", topic)) if v)
+        profile = f" Delegate profile - {profile}" if profile else ""
+    return PROMPTS[task].format(who=who, context=context, target=target or ("the opposing side" if s.get("kind") == "debate" else "the opposing delegation"), profile=profile, role=role,
+                                country=country or "the user's country", on=f" on '{topic}'" if topic else "", fmt=fmt,
+                                motion_on=f" The motion: '{topic}'." if topic else "",
+                                extension=" Finish with ## Closing-half extensions (2-3 distinct ideas)." if s.get("format") == "bp" else "")
 
 
 async def stream(messages: list[dict], s: dict) -> AsyncIterator[str]:

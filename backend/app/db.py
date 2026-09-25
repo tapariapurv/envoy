@@ -32,13 +32,24 @@ CREATE TABLE IF NOT EXISTS workspaces(
   id INTEGER PRIMARY KEY, name TEXT NOT NULL, conference TEXT DEFAULT '', dates TEXT DEFAULT '',
   delegate_country TEXT DEFAULT '', committee TEXT DEFAULT '', topic TEXT DEFAULT '',
   share_on INTEGER DEFAULT 0, share_code TEXT UNIQUE, created TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS rounds(
+  id INTEGER PRIMARY KEY, workspace_id INTEGER NOT NULL, name TEXT DEFAULT '', side TEXT DEFAULT '',
+  opponent TEXT DEFAULT '', result TEXT DEFAULT '', speaks REAL, judge TEXT DEFAULT '', motion TEXT DEFAULT '',
+  feedback TEXT DEFAULT '', created TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS flows(
+  id INTEGER PRIMARY KEY, workspace_id INTEGER NOT NULL, title TEXT DEFAULT 'Untitled flow', format TEXT DEFAULT 'bp',
+  data TEXT DEFAULT '{}', created TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS motions(
+  id INTEGER PRIMARY KEY, text TEXT NOT NULL, theme TEXT DEFAULT '', info TEXT DEFAULT '');
 """
-SCOPED = ("tasks", "documents", "drafts")  # per-workspace tables; clauses & flashcards are shared knowledge
-PROFILE_KEYS = ("delegate_country", "committee", "topic")  # stored on the workspace, not globally
+SCOPED = ("tasks", "documents", "drafts", "rounds", "flows")  # per-workspace; clauses, flashcards & motions are shared
+PROFILE_KEYS = ("delegate_country", "committee", "topic", "format", "side", "team")  # stored on the workspace, not globally
+WS_COLUMNS = {"kind": "TEXT NOT NULL DEFAULT 'mun'", "format": "TEXT DEFAULT ''", "side": "TEXT DEFAULT ''", "team": "TEXT DEFAULT ''"}
 
 DEFAULT_SETTINGS = {
     # Profile
     "delegate_country": "", "committee": "", "topic": "",
+    "format": "", "side": "", "team": "",  # debate workspaces (topic = the motion)
     # Appearance
     "theme": "system", "accent": "indigo", "font_scale": 1.0,
     # Timers (seconds)
@@ -98,6 +109,44 @@ FLASHCARDS = [
     ("Sponsor vs. Signatory", "Sponsors authored and support the resolution; signatories only wish to see it debated and need not vote for it."),
     ("Simple vs. Qualified Majority", "Simple majority: more than half of members present and voting. Qualified (two-thirds): needed for cloture and some procedural motions."),
 ]
+DEBATE_CARDS = [
+    ("Point of Information (POI)", "A short question or statement offered to the opposing speaker during unprotected time. The speaker may accept or decline; accept 1-2 per speech."),
+    ("Protected time", "The first and last minute of a speech (BP, Asians, WSDC) when POIs may not be offered. Marked by a single knock or bell."),
+    ("Burden of proof", "What a side must prove to win. Usually set by the motion's wording and the definitions: e.g. 'This House would' requires a policy and its benefits."),
+    ("Model", "The Proposition's concrete policy mechanism: who does what, how it is enforced and funded. Opposition may challenge but should not 'squirrel' the debate."),
+    ("Squirrelling", "Defining the motion in an unreasonable or unexpected way to escape the core clash. Penalised by adjudicators."),
+    ("Counter-model / counter-prop", "An alternative policy the Opposition proposes instead of the status quo. It must be mutually exclusive with the Proposition's model."),
+    ("Clash", "The core points of disagreement between the sides. Good speakers identify 2-3 clashes and win them explicitly."),
+    ("Weighing", "Comparing impacts to show why your arguments matter more: magnitude, probability, timeframe, reversibility, and who is affected."),
+    ("Extension (BP)", "New material from a closing team that is distinct from its opening half and adds a new reason to win. Required to beat the opening team."),
+    ("Member speech / Whip speech", "BP closing half: the Member brings the extension; the Whip summarises the debate by clashes and may not add new arguments."),
+    ("Reply speech (WSDC / Asians)", "A biased summary by the 1st or 2nd speaker, Opposition first. No new arguments; shows why your side won the key clashes."),
+    ("Dropped argument", "An argument the other side never responded to. Point it out: in most formats it is treated as conceded."),
+    ("Crossfire (PF)", "A 3-minute period where both speakers question each other. Grand crossfire involves all four debaters."),
+    ("Cross-examination (LD / Policy)", "A 3-minute question period where the previous speaker is questioned by an opponent. Used to set up arguments, not to make speeches."),
+    ("Value & criterion (LD)", "The value is the ideal the resolution should be judged by (e.g. justice); the criterion is the standard for measuring whether that value is achieved."),
+    ("Evidence card", "A quoted passage with a tag (the claim it proves) and a full citation. Used in PF, LD and Policy; paraphrasing a card misrepresents evidence."),
+    ("Signposting", "Telling the judge where you are: 'I have two responses, then my extension.' It makes the flow easy to follow."),
+    ("Speaker points", "Individual scores (e.g. 50-100 in BP, 60-80 in WSDC, 25-30 in US formats) reflecting style, content and strategy."),
+]
+MOTIONS = [
+    ("This House would ban private schools", "Education"),
+    ("This House believes that social media has done more harm than good for democracy", "Technology"),
+    ("This House would implement a universal basic income", "Economics"),
+    ("This House regrets the rise of influencer culture", "Culture"),
+    ("This House would allow the sale of human organs", "Ethics"),
+    ("This House supports the use of economic sanctions to promote human rights", "International relations"),
+    ("This House would make voting compulsory", "Politics"),
+    ("This House believes that developing nations should prioritise economic growth over environmental protection", "Environment"),
+    ("This House would abolish the veto power in the UN Security Council", "International relations"),
+    ("This House believes that the feminist movement should oppose the beauty industry", "Feminism"),
+    ("This House would ban the development of lethal autonomous weapons", "Technology"),
+    ("This House would tax meat", "Environment"),
+    ("This House believes that art should never be separated from the artist", "Culture"),
+    ("This House would give parents a vote on behalf of their children", "Politics"),
+    ("This House regrets the glorification of hustle culture", "Culture"),
+    ("This House would nationalise essential public utilities", "Economics"),
+]
 
 
 def connect() -> sqlite3.Connection:
@@ -141,9 +190,17 @@ def init() -> None:
                           [("preambulatory", p) for p in PREAMBULATORY] + [("operative", p) for p in OPERATIVE])
         if not c.execute("SELECT 1 FROM flashcards LIMIT 1").fetchone():
             c.executemany("INSERT INTO flashcards(front, back) VALUES(?,?)", FLASHCARDS)
+        if not c.execute("SELECT 1 FROM flashcards WHERE deck='Debate' LIMIT 1").fetchone():
+            c.executemany("INSERT INTO flashcards(front, back, deck) VALUES(?,?,'Debate')", DEBATE_CARDS)
+        if not c.execute("SELECT 1 FROM motions LIMIT 1").fetchone():
+            c.executemany("INSERT INTO motions(text, theme) VALUES(?,?)", MOTIONS)
         for t in SCOPED:  # migrate pre-workspace databases
             if "workspace_id" not in [r[1] for r in c.execute(f"PRAGMA table_info({t})")]:
                 c.execute(f"ALTER TABLE {t} ADD COLUMN workspace_id INTEGER NOT NULL DEFAULT 1")
+        have = [r[1] for r in c.execute("PRAGMA table_info(workspaces)")]
+        for col, decl in WS_COLUMNS.items():
+            if col not in have:
+                c.execute(f"ALTER TABLE workspaces ADD COLUMN {col} {decl}")
         if not c.execute("SELECT 1 FROM workspaces LIMIT 1").fetchone():
             old = {r[0]: json.loads(r[1]) for r in c.execute("SELECT key, value FROM settings WHERE key IN ('delegate_country','committee','topic')")}
             c.execute("INSERT INTO workspaces(id, name, delegate_country, committee, topic) VALUES(1, 'My first conference', ?, ?, ?)",
@@ -155,7 +212,7 @@ def get_settings(ws: int | None = None) -> dict:
     stored = {r["key"]: json.loads(r["value"]) for r in rows("SELECT key, value FROM settings")}
     s = {**DEFAULT_SETTINGS, **stored}
     if ws and (w := one("SELECT * FROM workspaces WHERE id=?", (ws,))):
-        s.update({k: w[k] for k in PROFILE_KEYS})
+        s.update({k: w[k] for k in (*PROFILE_KEYS, "kind")})
     return s
 
 

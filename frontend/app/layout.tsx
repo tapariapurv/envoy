@@ -10,7 +10,7 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
 const heading = Geist({ subsets: ["latin"], variable: "--font-heading", display: "swap" });
 
-export const metadata: Metadata = { title: "Envoy — Model UN Workspace", description: "Private, local-first AI workspace for Model UN delegates." };
+export const metadata: Metadata = { title: "Envoy — Model UN & Debate Workspace", description: "Private, local-first AI workspace for Model UN delegates and debaters." };
 export const viewport: Viewport = { themeColor: [{ media: "(prefers-color-scheme: dark)", color: "#111110" }, { color: "#f7f6f3" }] };
 
 // Applies the cached theme before first paint to avoid a light/dark flash.

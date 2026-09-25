@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Copy, ShieldCheck, Square, Swords, X } from "lucide-react";
-import { Empty, ErrorNote, Markdown, PageHeader, Thinking, copy } from "@/components/ui";
+import { ShieldCheck, Square, Swords } from "lucide-react";
+import { AIOutput, PageHeader, SourcePopup } from "@/components/ui";
 import { api, useAI, type Draft, type Source } from "@/lib/api";
 import { useSettings } from "@/lib/settings";
 
@@ -49,7 +49,7 @@ export default function Opponent() {
               {sim.busy && <button onClick={sim.stop} className="btn-ghost"><Square className="size-3.5" /> Stop</button>}
             </div>
           </div>
-          <Output ai={sim} empty="The 5 strongest arguments against you, the interest behind each, and how to respond." action={sim.out && !sim.busy ? <button onClick={() => setClaim(sim.out)} className="btn-outline">Rebut these →</button> : null} />
+          <AIOutput icon={Swords} ai={sim} empty="The 5 strongest arguments against you, the interest behind each, and how to respond." action={sim.out && !sim.busy ? <button onClick={() => setClaim(sim.out)} className="btn-outline">Rebut these →</button> : null} />
         </section>
 
         <section className="flex flex-col gap-3">
@@ -62,31 +62,11 @@ export default function Opponent() {
               {reb.busy && <button onClick={reb.stop} className="btn-ghost"><Square className="size-3.5" /> Stop</button>}
             </div>
           </div>
-          <Output ai={reb} onCite={(n) => setSrc(reb.sources.find((x) => x.n === n) ?? null)} empty="Each claim is checked against your uploaded documents, with citations you can click to verify." />
+          <AIOutput icon={Swords} ai={reb} onCite={(n) => setSrc(reb.sources.find((x) => x.n === n) ?? null)} empty="Each claim is checked against your uploaded documents, with citations you can click to verify." />
         </section>
       </div>
 
-      {src && (
-        <div role="dialog" aria-label="Source" className="rise fixed bottom-5 right-5 z-40 w-[min(480px,calc(100vw-2.5rem))] card p-4">
-          <div className="mb-2 flex items-center gap-2"><span className="flex-1 truncate text-sm font-medium">[{src.n}] {src.name}</span>
-            <button onClick={() => setSrc(null)} className="btn-ghost p-1" aria-label="Close"><X className="size-4" /></button></div>
-          <div className="max-h-72 overflow-auto text-sm"><Markdown text={src.text} /></div>
-        </div>
-      )}
+      <SourcePopup src={src} onClose={() => setSrc(null)} />
     </>
-  );
-}
-
-function Output({ ai, empty, action, onCite }: { ai: ReturnType<typeof useAI>; empty: string; action?: React.ReactNode; onCite?: (n: number) => void }) {
-  return (
-    <div className="card min-h-64 p-5">
-      <ErrorNote msg={ai.error} />
-      {ai.out ? (
-        <>
-          <div className="mb-2 flex justify-end gap-1">{action}<button onClick={() => copy(ai.out)} className="btn-ghost" aria-label="Copy"><Copy className="size-4" /></button></div>
-          <Markdown text={ai.out} onCite={onCite} />
-        </>
-      ) : ai.busy ? <Thinking /> : !ai.error && <Empty icon={Swords} title="No output yet">{empty}</Empty>}
-    </div>
   );
 }

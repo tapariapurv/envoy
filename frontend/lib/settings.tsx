@@ -4,7 +4,7 @@ import { api, apiFetch } from "./api";
 
 // Mirrors backend DEFAULT_SETTINGS so the UI works before the first fetch / when offline.
 export const DEFAULTS = {
-  delegate_country: "", committee: "", topic: "",
+  delegate_country: "", committee: "", topic: "", format: "", side: "", team: "",
   theme: "system", accent: "indigo", font_scale: 1,
   timer_speaker: 60, timer_mod_total: 600, timer_mod_speaker: 45, timer_unmod: 900, timer_warning: 10, timer_sound: true,
   wpm: 150, prompter_font: 44, prompter_mirror: false,

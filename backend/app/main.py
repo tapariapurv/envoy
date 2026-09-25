@@ -107,11 +107,15 @@ def current_workspace(c: Ctx = Depends(ctx)):
 
 class Workspace(BaseModel):
     name: str = Field(min_length=1, max_length=120)
+    kind: str = Field("mun", pattern="^(mun|debate)$")
     conference: str = ""
     dates: str = ""
     delegate_country: str = ""
     committee: str = ""
     topic: str = ""
+    format: str = ""
+    side: str = ""
+    team: str = ""
 
 
 @app.get("/api/workspaces")
@@ -121,14 +125,14 @@ def list_workspaces(_: Ctx = Depends(owner)):
 
 @app.post("/api/workspaces")
 def create_workspace(w: Workspace, _: Ctx = Depends(owner)):
-    id = db.execute("INSERT INTO workspaces(name, conference, dates, delegate_country, committee, topic) VALUES(?,?,?,?,?,?)",
-                    (w.name, w.conference, w.dates, w.delegate_country, w.committee, w.topic))
+    data = w.model_dump()
+    id = db.execute(f"INSERT INTO workspaces({', '.join(data)}) VALUES({', '.join('?' * len(data))})", tuple(data.values()))
     return _ws_out(db.one("SELECT * FROM workspaces WHERE id=?", (id,)), True)
 
 
 @app.patch("/api/workspaces/{id}")
 def update_workspace(id: int, body: dict, _: Ctx = Depends(owner)):
-    return _ws_out(patch("workspaces", id, body, set(Workspace.model_fields)), True)
+    return _ws_out(patch("workspaces", id, body, set(Workspace.model_fields) - {"kind"}), True)
 
 
 @app.delete("/api/workspaces/{id}")
@@ -356,6 +360,43 @@ def delete_card(id: int, _: Ctx = Depends(owner)):
     return {"ok": True}
 
 
+# ---------- debate: round log, flow sheets (per workspace) & motion bank (shared) ----------
+def crud(table: str, fields: set[str], scoped: bool, required: str = "", delete_dep=ctx):
+    """List/create/patch/delete routes for a simple table. Values must be scalars (flows send their grid as JSON text)."""
+    def clean(body: dict) -> dict:
+        data = {k: v for k, v in body.items() if k in fields}
+        if any(not isinstance(v, (str, int, float, type(None))) for v in data.values()):
+            raise HTTPException(422, "Values must be text or numbers")
+        return data
+
+    @app.get(f"/api/{table}")
+    def list_rows(c: Ctx = Depends(ctx)):
+        return db.rows(f"SELECT * FROM {table} WHERE workspace_id=? ORDER BY id DESC", (c.ws,)) if scoped \
+            else db.rows(f"SELECT * FROM {table} ORDER BY id")
+
+    @app.post(f"/api/{table}")
+    def create_row(body: dict, c: Ctx = Depends(ctx)):
+        data = clean(body) | ({"workspace_id": c.ws} if scoped else {})
+        if required and not str(data.get(required, "")).strip():
+            raise HTTPException(422, f"{required} is required")
+        id = db.execute(f"INSERT INTO {table}({', '.join(data)}) VALUES({', '.join('?' * len(data))})", tuple(data.values()))
+        return db.one(f"SELECT * FROM {table} WHERE id=?", (id,))
+
+    @app.patch(f"/api/{table}/{{id}}")
+    def update_row(id: int, body: dict, c: Ctx = Depends(ctx)):
+        return patch(table, id, clean(body), fields, c.ws if scoped else None)
+
+    @app.delete(f"/api/{table}/{{id}}")
+    def delete_row(id: int, c: Ctx = Depends(delete_dep)):
+        db.execute(f"DELETE FROM {table} WHERE id=?" + (" AND workspace_id=?" if scoped else ""), (id, c.ws) if scoped else (id,))
+        return {"ok": True}
+
+
+crud("rounds", {"name", "side", "opponent", "result", "speaks", "judge", "motion", "feedback"}, scoped=True)
+crud("flows", {"title", "format", "data"}, scoped=True)
+crud("motions", {"text", "theme", "info"}, scoped=False, required="text", delete_dep=owner)
+
+
 # ---------- AI (streamed NDJSON: {"sources":[...]} then {"t": token}... or {"error": msg}) ----------
 class AIRequest(BaseModel):
     text: str = Field(min_length=1, max_length=60_000)
@@ -385,7 +426,9 @@ async def ai(task: str, r: AIRequest, c: Ctx = Depends(ctx)):
             elif task == "counter":
                 user = f"Topic: {r.topic or s['topic'] or 'unspecified'}\n\nMy position:\n{r.text}"
             elif task == "rebut":
-                user = f"Opponent's argument ({r.target or 'unspecified delegation'}):\n{r.text}"
+                user = f"Opponent's argument ({r.target or 'unspecified'}):\n{r.text}"
+            elif task in ("spar", "flowcheck", "poi", "weigh", "case", "card"):
+                user = f"Motion: {r.topic or s['topic'] or 'unspecified'}\n\n{r.text}"
             history = [m for m in r.history[-8:] if m.get("role") in ("user", "assistant")]
             messages = [{"role": "system", "content": llm.system_prompt(task, s, context, r.target, r.topic)},
                         *[{"role": m["role"], "content": str(m.get("content", ""))} for m in history],

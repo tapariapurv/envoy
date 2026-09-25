@@ -2,7 +2,8 @@
 import DOMPurify from "dompurify";
 import { marked } from "marked";
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Check } from "lucide-react";
+import { AlertTriangle, Check, Copy, X } from "lucide-react";
+import type { Source, useAI } from "@/lib/api";
 
 export function PageHeader({ title, sub, children }: { title: string; sub?: string; children?: React.ReactNode }) {
   return (
@@ -90,4 +91,31 @@ export function Toaster() {
 export async function copy(text: string, label = "Copied") {
   await navigator.clipboard.writeText(text);
   toast(label);
+}
+
+/** Card showing a streamed AI result: error, thinking dots, empty state, or the Markdown with copy + extra actions. */
+export function AIOutput({ ai, icon, empty, action, onCite }: { ai: ReturnType<typeof useAI>; icon: React.ElementType; empty: string; action?: React.ReactNode; onCite?: (n: number) => void }) {
+  return (
+    <div className="card min-h-64 p-5">
+      <ErrorNote msg={ai.error} />
+      {ai.out ? (
+        <>
+          <div className="mb-2 flex justify-end gap-1">{action}<button onClick={() => copy(ai.out)} className="btn-ghost" aria-label="Copy"><Copy className="size-4" /></button></div>
+          <Markdown text={ai.out} onCite={onCite} />
+        </>
+      ) : ai.busy ? <Thinking /> : !ai.error && <Empty icon={icon} title="No output yet">{empty}</Empty>}
+    </div>
+  );
+}
+
+/** Floating card with the passage behind a clicked [n] citation. */
+export function SourcePopup({ src, onClose }: { src: Source | null; onClose: () => void }) {
+  if (!src) return null;
+  return (
+    <div role="dialog" aria-label="Source" className="rise fixed bottom-5 right-5 z-40 w-[min(480px,calc(100vw-2.5rem))] card p-4">
+      <div className="mb-2 flex items-center gap-2"><span className="flex-1 truncate text-sm font-medium">[{src.n}] {src.name}</span>
+        <button onClick={onClose} className="btn-ghost p-1" aria-label="Close"><X className="size-4" /></button></div>
+      <div className="max-h-72 overflow-auto text-sm"><Markdown text={src.text} /></div>
+    </div>
+  );
 }

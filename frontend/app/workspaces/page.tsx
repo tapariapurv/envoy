@@ -2,17 +2,27 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { ArrowRight, Copy, Pencil, Plus, RefreshCw, Trash2, Users, Wifi, X } from "lucide-react";
+import { HOME } from "@/components/Sidebar";
 import { ErrorNote, PageHeader, copy, toast } from "@/components/ui";
+import { FORMATS } from "@/lib/debate";
 import { api } from "@/lib/api";
 import { useWorkspace, type Workspace } from "@/lib/workspace";
 
-const FIELDS = [
-  ["name", "Workspace name", "e.g. HMUN 2026"], ["conference", "Conference", "Harvard Model United Nations"],
-  ["dates", "Dates", "Jan 29 – Feb 1, 2027"], ["delegate_country", "Country", "Republic of Kenya"],
-  ["committee", "Committee", "UNEP"], ["topic", "Topic", "Plastic pollution"],
-] as const;
-type Form = Record<(typeof FIELDS)[number][0], string>;
-const EMPTY: Form = { name: "", conference: "", dates: "", delegate_country: "", committee: "", topic: "" };
+type Kind = Workspace["kind"];
+const FIELDS: Record<Kind, [string, string, string][]> = {
+  mun: [["name", "Workspace name", "e.g. HMUN 2026"], ["conference", "Conference", "Harvard Model United Nations"],
+    ["dates", "Dates", "Jan 29 – Feb 1, 2027"], ["delegate_country", "Country", "Republic of Kenya"],
+    ["committee", "Committee", "UNEP"], ["topic", "Topic", "Plastic pollution"]],
+  debate: [["name", "Workspace name", "e.g. Worlds 2027"], ["conference", "Tournament", "World Schools Debating Championship"],
+    ["dates", "Dates", "Jul 12 – 22, 2027"], ["format", "Format", ""], ["team", "Team", "Team Canada A"],
+    ["side", "Side (if known)", "Proposition"], ["topic", "Motion (if known)", "This House would ban zoos"]],
+};
+const DETAILS: Record<Kind, [string, keyof Workspace][]> = {
+  mun: [["Country", "delegate_country"], ["Committee", "committee"], ["Topic", "topic"]],
+  debate: [["Format", "format"], ["Team", "team"], ["Side", "side"]],
+};
+type Form = Record<string, string>;
+const empty = (kind: Kind): Form => ({ kind, ...Object.fromEntries(FIELDS[kind].map(([k]) => [k, k === "format" ? "bp" : ""])) });
 
 export default function WorkspacesPage() {
   return <Suspense><Workspaces /></Suspense>;
@@ -22,7 +32,7 @@ function Workspaces() {
   const { ws, guest, list, refresh, switchTo } = useWorkspace();
   const router = useRouter();
   const params = useSearchParams();
-  const [creating, setCreating] = useState(params.get("new") === "1");
+  const [creating, setCreating] = useState<Kind | null>(params.get("new") === "1" ? (params.get("kind") === "debate" ? "debate" : ws?.kind ?? "mun") : null);
   const [editing, setEditing] = useState<number | null>(null);
   const [share, setShare] = useState<{ share: boolean; share_url: string } | null>(null);
   const [err, setErr] = useState("");
@@ -40,51 +50,56 @@ function Workspaces() {
 
   return (
     <>
-      <PageHeader title="Workspaces" sub="One workspace per conference: its own tasks, research vault, drafts and delegation profile.">
-        <button onClick={() => setCreating(true)} className="btn-primary"><Plus className="size-4" /> New workspace</button>
+      <PageHeader title="Workspaces" sub="One workspace per conference or tournament: its own research vault, drafts and profile. Share it with your delegation or team.">
+        <button onClick={() => setCreating(ws?.kind ?? "mun")} className="btn-primary"><Plus className="size-4" /> New workspace</button>
       </PageHeader>
       <ErrorNote msg={err} />
 
       {creating && (
         <WorkspaceForm
-          title="New workspace" initial={EMPTY} submit="Create workspace" onCancel={() => setCreating(false)}
+          key={creating} title="New workspace" initial={empty(creating)} submit="Create workspace" onCancel={() => setCreating(null)} onKind={setCreating}
           onSave={(f) => run(async () => {
             const w = await api<Workspace>("/api/workspaces", "POST", f);
-            setCreating(false); switchTo(w.id); router.push("/"); toast(`Switched to ${w.name}`);
+            setCreating(null); switchTo(w.id); router.push(HOME[w.kind]); toast(`Switched to ${w.name}`);
           })}
         />
       )}
 
       <div className="grid gap-4 lg:grid-cols-2">
         {list.map((w) => editing === w.id ? (
-          <WorkspaceForm key={w.id} title={`Edit ${w.name}`} initial={{ ...EMPTY, ...pick(w) }} submit="Save" onCancel={() => setEditing(null)}
+          <WorkspaceForm key={w.id} title={`Edit ${w.name}`} initial={pick(w)} submit="Save" onCancel={() => setEditing(null)}
             onSave={(f) => run(async () => { await api(`/api/workspaces/${w.id}`, "PATCH", f); setEditing(null); })} />
         ) : (
           <article key={w.id} className={`card flex flex-col p-5 ${w.id === ws?.id ? "ring-2 ring-accent/40" : ""}`}>
             <div className="flex items-start gap-3">
               <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-accent/12 text-lg font-semibold text-accent">{w.name.slice(0, 1).toUpperCase()}</span>
               <div className="min-w-0 flex-1">
-                <h2 className="truncate font-display text-xl">{w.name}</h2>
+                <h2 className="flex items-center gap-2 font-display text-xl"><span className="truncate">{w.name}</span>
+                  <span className="rounded bg-subtle px-1.5 py-0.5 font-sans text-[10px] font-medium uppercase tracking-wide text-muted">{w.kind === "debate" ? "Debate" : "MUN"}</span></h2>
                 <p className="truncate text-sm text-muted">{[w.conference, w.dates].filter(Boolean).join(" · ") || "No conference details yet"}</p>
               </div>
               {w.id === ws?.id && <span className="chip" data-on="true">Active</span>}
             </div>
             <dl className="mt-4 grid grid-cols-3 gap-2 text-sm">
-              {[["Country", w.delegate_country], ["Committee", w.committee], ["Topic", w.topic]].map(([k, v]) => (
-                <div key={k} className="min-w-0 rounded-lg bg-subtle/70 px-3 py-2"><dt className="label">{k}</dt><dd className="truncate">{v || "—"}</dd></div>
+              {DETAILS[w.kind].map(([k, f]) => (
+                <div key={k} className="min-w-0 rounded-lg bg-subtle/70 px-3 py-2"><dt className="label">{k}</dt>
+                  <dd className="truncate">{(f === "format" ? FORMATS[w.format]?.name : String(w[f] ?? "")) || "—"}</dd></div>
               ))}
             </dl>
-            <p className="mt-3 text-xs text-muted">{w.counts.tasks} tasks · {w.counts.documents} documents · {w.counts.drafts} drafts</p>
+            <p className="mt-3 text-xs text-muted">{w.kind === "debate"
+              ? `${w.counts.rounds} rounds · ${w.counts.documents} documents · ${w.counts.drafts} cases`
+              : `${w.counts.tasks} tasks · ${w.counts.documents} documents · ${w.counts.drafts} drafts`}</p>
 
             <SharePanel w={w} share={share} onChange={(body) => run(() => api(`/api/workspaces/${w.id}/share`, "POST", body))} />
 
             <div className="mt-4 flex flex-wrap gap-2 border-t border-line pt-4">
-              {w.id !== ws?.id && <button onClick={() => { switchTo(w.id); router.push("/"); }} className="btn-primary">Open <ArrowRight className="size-4" /></button>}
+              {w.id !== ws?.id && <button onClick={() => { switchTo(w.id); router.push(HOME[w.kind]); }} className="btn-primary">Open <ArrowRight className="size-4" /></button>}
               <button onClick={() => setEditing(w.id)} className="btn-outline"><Pencil className="size-3.5" /> Edit</button>
               <button disabled={list.length < 2} title={list.length < 2 ? "You need at least one workspace" : undefined}
                 onClick={() => confirm(`Delete "${w.name}" and all its tasks, documents and drafts? This cannot be undone.`) && run(async () => {
                   await api(`/api/workspaces/${w.id}`, "DELETE");
-                  if (w.id === ws?.id) switchTo(list.find((x) => x.id !== w.id)!.id);
+                  const rest = list.filter((x) => x.id !== w.id);
+                  if (w.id === ws?.id) switchTo((rest.find((x) => x.kind === w.kind) ?? rest[0]).id);
                 })} className="btn-ghost ml-auto text-danger"><Trash2 className="size-4" /></button>
             </div>
           </article>
@@ -94,18 +109,31 @@ function Workspaces() {
   );
 }
 
-const pick = (w: Workspace): Form => Object.fromEntries(FIELDS.map(([k]) => [k, (w as unknown as Form)[k] ?? ""])) as Form;
+const pick = (w: Workspace): Form => ({ kind: w.kind, ...Object.fromEntries(FIELDS[w.kind].map(([k]) => [k, (w as unknown as Form)[k] || (k === "format" ? "bp" : "")])) });
 
-function WorkspaceForm({ title, initial, submit, onSave, onCancel }: { title: string; initial: Form; submit: string; onSave: (f: Form) => void; onCancel: () => void }) {
+function WorkspaceForm({ title, initial, submit, onSave, onCancel, onKind }: { title: string; initial: Form; submit: string; onSave: (f: Form) => void; onCancel: () => void; onKind?: (k: Kind) => void }) {
   const [f, setF] = useState(initial);
+  const kind = f.kind as Kind;
   return (
     <form onSubmit={(e) => { e.preventDefault(); if (f.name.trim()) onSave(f); }} className="card rise mb-4 p-5 lg:col-span-2">
       <div className="mb-4 flex items-center justify-between"><h2 className="font-display text-xl">{title}</h2>
         <button type="button" onClick={onCancel} className="btn-ghost p-1.5" aria-label="Cancel"><X className="size-4" /></button></div>
+      {onKind && (
+        <div className="mb-4 flex w-fit gap-1 rounded-xl bg-subtle p-1" role="tablist" aria-label="Workspace type">
+          {([["mun", "Model UN conference"], ["debate", "Debate tournament"]] as const).map(([k, l]) => (
+            <button key={k} type="button" role="tab" aria-selected={kind === k} onClick={() => onKind(k)}
+              className={`rounded-lg px-4 py-1.5 text-sm ${kind === k ? "bg-panel font-medium shadow-[var(--shadow)]" : "text-muted hover:text-fg"}`}>{l}</button>
+          ))}
+        </div>
+      )}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {FIELDS.map(([k, label, ph]) => (
+        {FIELDS[kind].map(([k, label, ph]) => (
           <label key={k} className="flex flex-col gap-1"><span className="label">{label}</span>
-            <input value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })} placeholder={ph} required={k === "name"} autoFocus={k === "name"} className="input" /></label>
+            {k === "format" ? (
+              <select value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })} className="input">
+                {Object.entries(FORMATS).map(([id, x]) => <option key={id} value={id}>{x.name}</option>)}
+              </select>
+            ) : <input value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })} placeholder={ph} required={k === "name"} autoFocus={k === "name"} className="input" />}</label>
         ))}
       </div>
       <div className="mt-4 flex gap-2"><button className="btn-primary">{submit}</button><button type="button" onClick={onCancel} className="btn-ghost">Cancel</button></div>

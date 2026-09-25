@@ -15,7 +15,7 @@ export default function WorkspaceSwitcher() {
   }, []);
   if (!ws) return null;
 
-  const sub = [ws.delegate_country, ws.committee].filter(Boolean).join(" · ") || ws.conference || "Set up your delegation";
+  const sub = (ws.kind === "debate" ? [ws.team, ws.side] : [ws.delegate_country, ws.committee]).filter(Boolean).join(" · ") || ws.conference || (ws.kind === "debate" ? "Set up your team" : "Set up your delegation");
   const pick = (id: number) => { if (menu.current) menu.current.open = false; switchTo(id); };
 
   return (
@@ -35,7 +35,7 @@ export default function WorkspaceSwitcher() {
           <>
             <div className="label px-2.5 pb-1 pt-1.5">Workspaces</div>
             <div className="max-h-64 overflow-auto">
-              {list.map((w) => (
+              {list.filter((w) => w.kind === ws.kind).map((w) => (
                 <button key={w.id} onClick={() => pick(w.id)} className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm hover:bg-subtle">
                   <span className="min-w-0 flex-1 truncate">{w.name}</span>
                   {!!w.share_on && <Users className="size-3.5 text-muted" aria-label="Shared" />}
@@ -44,7 +44,7 @@ export default function WorkspaceSwitcher() {
               ))}
             </div>
             <div className="my-1 h-px bg-line" />
-            <Link href="/workspaces?new=1" onClick={() => menu.current?.removeAttribute("open")} className="flex items-center gap-2 rounded-md px-2.5 py-2 text-sm hover:bg-subtle"><Plus className="size-4" /> New workspace</Link>
+            <Link href={`/workspaces?new=1&kind=${ws.kind}`} onClick={() => menu.current?.removeAttribute("open")} className="flex items-center gap-2 rounded-md px-2.5 py-2 text-sm hover:bg-subtle"><Plus className="size-4" /> New workspace</Link>
             <Link href="/workspaces" onClick={() => menu.current?.removeAttribute("open")} className="flex items-center gap-2 rounded-md px-2.5 py-2 text-sm hover:bg-subtle"><Settings2 className="size-4" /> Manage & share</Link>
           </>
         )}

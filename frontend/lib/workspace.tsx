@@ -6,9 +6,10 @@ import { api, ApiError, session } from "./api";
 
 export type Workspace = {
   id: number; name: string; conference: string; dates: string;
-  delegate_country: string; committee: string; topic: string;
+  kind: "mun" | "debate"; delegate_country: string; committee: string; topic: string;
+  format: string; side: string; team: string;
   share_on: number; share_code?: string; guest?: boolean;
-  counts: { tasks: number; documents: number; drafts: number };
+  counts: { tasks: number; documents: number; drafts: number; rounds: number; flows: number };
 };
 
 type Ctx = { ws: Workspace | null; guest: boolean; list: Workspace[]; switchTo: (id: number) => void; refresh: () => Promise<void>; leave: () => void };

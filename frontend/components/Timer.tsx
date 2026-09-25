@@ -3,10 +3,10 @@ import { useEffect, useRef, useState } from "react";
 import { Minus, Pause, Play, Plus, RotateCcw } from "lucide-react";
 import { fmtTime } from "@/lib/api";
 
-function beep() {
+function beep(times = 2) {
   try {
     const ctx = new AudioContext();
-    [0, 0.3].forEach((t) => {
+    [0, 0.3].slice(0, times).forEach((t) => {
       const o = ctx.createOscillator(), g = ctx.createGain();
       o.frequency.value = 880;
       g.gain.setValueAtTime(0.18, ctx.currentTime + t);
@@ -24,8 +24,9 @@ const parse = (v: string) => {
   return Number.isFinite(n) && n > 0 ? Math.round(n) : null;
 };
 
-/** Drift-free timer: derives time from Date.now(), not from counting ticks. `seconds=0` makes a stopwatch. */
-export default function Timer({ label, seconds, warning = 10, sound = true, big = false }: { label: string; seconds: number; warning?: number; sound?: boolean; big?: boolean }) {
+/** Drift-free timer: derives time from Date.now(), not from counting ticks. `seconds=0` makes a stopwatch.
+ *  `poi` = [open, close] seconds of unprotected time: a single knock at each edge, as in parliamentary debate. */
+export default function Timer({ label, seconds, warning = 10, sound = true, big = false, poi }: { label: string; seconds: number; warning?: number; sound?: boolean; big?: boolean; poi?: [number, number] }) {
   const stopwatch = seconds === 0;
   const [base, setBase] = useState(seconds);
   const [acc, setAcc] = useState(0);
@@ -33,6 +34,7 @@ export default function Timer({ label, seconds, warning = 10, sound = true, big 
   const [, tick] = useState(0);
   const [editing, setEditing] = useState(false);
   const rang = useRef(false);
+  const knocked = useRef(0); // how many POI-window edges have sounded
 
   useEffect(() => { if (start === null) setBase(seconds); }, [seconds]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -48,10 +50,13 @@ export default function Timer({ label, seconds, warning = 10, sound = true, big 
 
   useEffect(() => {
     if (!stopwatch && remaining <= 0 && start && !rang.current) { rang.current = true; if (sound) beep(); }
+    const edges = poi?.filter((t) => elapsed >= t).length ?? 0;
+    if (start && edges > knocked.current) { knocked.current = edges; if (sound) beep(1); }
   });
 
   const toggle = () => (start ? (setAcc(acc + Date.now() - start), setStart(null)) : setStart(Date.now()));
-  const reset = () => { setAcc(0); setStart(null); rang.current = false; };
+  const reset = () => { setAcc(0); setStart(null); rang.current = false; knocked.current = 0; };
+  const poiOpen = poi && elapsed >= poi[0] && elapsed < poi[1];
   const nudge = (d: number) => { setBase((b) => Math.max(5, b + d)); if (d > 0) rang.current = false; };
 
   const display = stopwatch ? fmtTime(Math.floor(elapsed)) : over ? `+${fmtTime(-remaining)}` : fmtTime(remaining);
@@ -70,6 +75,7 @@ export default function Timer({ label, seconds, warning = 10, sound = true, big 
     >
       <div className="flex items-center justify-between">
         <span className="label">{label}</span>
+        {poi && (elapsed > 0 || start) && <span className={`chip ${poiOpen ? "text-ok" : ""}`}>{poiOpen ? "POIs open" : "Protected"}</span>}
         {!stopwatch && <span className="text-xs text-muted">of {fmtTime(base)}</span>}
       </div>
       {editing ? (

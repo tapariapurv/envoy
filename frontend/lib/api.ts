@@ -38,7 +38,11 @@ export type Doc = { id: number; name: string; chunks: number; chars: number; cre
 export type Draft = { id: number; title: string; content: string; updated: string };
 export type Clause = { id: number; kind: "preambulatory" | "operative" | "custom"; phrase: string; example: string; topic: string };
 export type Card = { id: number; front: string; back: string; deck: string; known: number };
-export type AITask = "chat" | "tone" | "format" | "polish" | "assist" | "counter" | "rebut";
+export type AITask = "chat" | "tone" | "format" | "polish" | "assist" | "counter" | "rebut"
+  | "breakdown" | "case" | "weigh" | "spar" | "poi" | "flowcheck" | "drill" | "card";
+export type Round = { id: number; name: string; side: string; opponent: string; result: string; speaks: number | null; judge: string; motion: string; feedback: string; created: string };
+export type Flow = { id: number; title: string; format: string; data: string };
+export type Motion = { id: number; text: string; theme: string; info: string };
 
 export async function api<T = unknown>(path: string, method = "GET", body?: unknown): Promise<T> {
   const isForm = body instanceof FormData;
