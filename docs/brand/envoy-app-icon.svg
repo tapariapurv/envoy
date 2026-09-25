@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" color="#ffffff">
+  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6366F1"/><stop offset="1" stop-color="#4338CA"/></linearGradient></defs>
+  <rect width="64" height="64" rx="14.5" fill="url(#g)"/>
+  <rect x=".5" y=".5" width="63" height="63" rx="14" fill="none" stroke="#fff" stroke-opacity=".12"/>
+  <g fill="currentColor" transform="translate(-2.2 2.6)">
+    <path d="M28.2 20H52.4L49 26H28.2Q27 26 27 24.8V21.2Q27 20 28.2 20Z"/>
+    <path d="M30.8 29.6H46.2Q47.2 29.6 47.2 30.6V34.2Q47.2 35.2 46.2 35.2H30.8Q29.8 35.2 29.8 34.2V30.6Q29.8 29.6 30.8 29.6Z"/>
+    <path d="M28.2 38.8H49L52.4 44.8H28.2Q27 44.8 27 43.6V40Q27 38.8 28.2 38.8Z"/>
+    <circle cx="40" cy="11.6" r="2.4"/>
+    <path d="M41.7 13.3 44.6 16.2V20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M30.5 47.5C21 45.5 16.5 38 17 31C17.5 25 21 19.5 26.5 16.5" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"/>
+    <path d="M0 0C2.4-2.3 2.4-6.2 0-8.5C-2.4-6.2-2.4-2.3 0 0Z" transform="translate(22.4 43.6) rotate(-125)"/>
+    <path d="M0 0C2.4-2.3 2.4-6.2 0-8.5C-2.4-6.2-2.4-2.3 0 0Z" transform="translate(17.6 36.3) rotate(-62)"/>
+    <path d="M0 0C2.4-2.3 2.4-6.2 0-8.5C-2.4-6.2-2.4-2.3 0 0Z" transform="translate(19 24.2) rotate(-18)"/>
+    <path d="M0 0C2.4-2.3 2.4-6.2 0-8.5C-2.4-6.2-2.4-2.3 0 0Z" transform="translate(24.2 18) rotate(14)"/>
+    <path d="M0 0C2-1.9 2-5.1 0-7C-2-5.1-2-1.9 0 0Z" transform="translate(26.4 16.6) rotate(62)"/>
+    <path d="M0 0C2-1.9 2-5.1 0-7C-2-5.1-2-1.9 0 0Z" transform="translate(20.6 40.4) rotate(28)"/>
+    <path d="M0 0C2-1.9 2-5.1 0-7C-2-5.1-2-1.9 0 0Z" transform="translate(17.4 30.6) rotate(38)"/>
+  </g>
+</svg>

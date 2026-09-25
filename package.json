@@ -1,0 +1,14 @@
+{
+  "name": "envoy-workspace",
+  "private": true,
+  "license": "MIT",
+  "description": "Privacy-first local AI workspace for Model UN",
+  "type": "module",
+  "engines": { "node": ">=20.11" },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "share": "node scripts/dev.mjs --share",
+    "test": "cd backend && ENVOY_DATA=$(mktemp -d) .venv/bin/python -m tests.test_core && cd ../frontend && npx tsc --noEmit",
+    "guide:pdf": "backend/.venv/bin/python docs/build_guide_pdf.py"
+  }
+}

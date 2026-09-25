@@ -1,0 +1,148 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where([data-dark="true"], [data-dark="true"] *));
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-panel: var(--panel);
+  --color-subtle: var(--subtle);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-warn: var(--warn);
+  --color-danger: var(--danger);
+  --color-ok: var(--ok);
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-heading), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+/* Themes: set on <html data-theme>. Accent set on <html data-accent>. */
+:root, [data-theme="light"] {
+  --bg: #f7f6f3; --panel: #ffffff; --subtle: #efede8; --fg: #1d1c1a; --muted: #75716a; --line: #e4e1da;
+  --warn: #c2410c; --danger: #dc2626; --ok: #059669; --shadow: 0 1px 2px rgb(0 0 0 / .04), 0 4px 16px rgb(0 0 0 / .04);
+}
+[data-theme="dark"] {
+  --bg: #111110; --panel: #191918; --subtle: #232321; --fg: #ecebe7; --muted: #9d998f; --line: #3d3c38;
+  --warn: #fb923c; --danger: #f87171; --ok: #34d399; --shadow: 0 1px 2px rgb(0 0 0 / .3), 0 8px 24px rgb(0 0 0 / .25);
+}
+[data-theme="midnight"] {
+  --bg: #0b1020; --panel: #111830; --subtle: #1a2342; --fg: #e6e9f5; --muted: #929bbb; --line: #34406a;
+  --warn: #fbbf24; --danger: #fb7185; --ok: #34d399; --shadow: 0 8px 24px rgb(0 0 0 / .35);
+}
+[data-theme="sepia"] {
+  --bg: #f3ecdf; --panel: #fbf6ec; --subtle: #eadfca; --fg: #3b2f22; --muted: #857259; --line: #dccdb2;
+  --warn: #b45309; --danger: #b91c1c; --ok: #047857; --shadow: 0 1px 2px rgb(60 40 10 / .06), 0 4px 16px rgb(60 40 10 / .06);
+}
+
+:root { --accent: #4f46e5; --accent-fg: #fff; }
+[data-accent="indigo"]  { --accent: #4f46e5; }
+[data-accent="emerald"] { --accent: #059669; }
+[data-accent="rose"]    { --accent: #e11d48; }
+[data-accent="amber"]   { --accent: #d97706; }
+[data-accent="sky"]     { --accent: #0284c7; }
+[data-accent="violet"]  { --accent: #7c3aed; }
+[data-accent="slate"]   { --accent: #475569; }
+[data-dark="true"][data-accent="indigo"]  { --accent: #818cf8; --accent-fg: #0b0b1a; }
+[data-dark="true"][data-accent="emerald"] { --accent: #34d399; --accent-fg: #03140e; }
+[data-dark="true"][data-accent="rose"]    { --accent: #fb7185; --accent-fg: #1a0409; }
+[data-dark="true"][data-accent="amber"]   { --accent: #fbbf24; --accent-fg: #1a1203; }
+[data-dark="true"][data-accent="sky"]     { --accent: #38bdf8; --accent-fg: #03121a; }
+[data-dark="true"][data-accent="violet"]  { --accent: #a78bfa; --accent-fg: #0f0820; }
+[data-dark="true"][data-accent="slate"]   { --accent: #cbd5e1; --accent-fg: #0f172a; }
+
+/* Geist headings: semibold with tight tracking (replaces the condensed display serif). */
+.font-display { font-weight: 600; letter-spacing: -0.025em; }
+html { background: var(--bg); color: var(--fg); -webkit-font-smoothing: antialiased; color-scheme: light; }
+/* Native controls (select menus, checkboxes, scrollbars, date pickers) follow the active theme. */
+html[data-dark="true"] { color-scheme: dark; }
+body { font-family: var(--font-sans); }
+::selection { background: color-mix(in srgb, var(--accent) 25%, transparent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+* { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+
+@layer components {
+  .card { @apply rounded-2xl border border-line bg-panel; box-shadow: var(--shadow); }
+  .input { @apply w-full rounded-lg border border-line bg-panel px-3 py-2 text-sm text-fg placeholder:text-muted outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20; }
+  .btn { @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition select-none disabled:opacity-40 disabled:pointer-events-none; }
+  .btn-primary { @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition select-none disabled:opacity-40 disabled:pointer-events-none bg-accent text-accent-fg hover:opacity-90 active:scale-[.98]; }
+  .btn-ghost { @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition select-none disabled:opacity-40 disabled:pointer-events-none text-muted hover:bg-subtle hover:text-fg; }
+  .btn-outline { @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition select-none disabled:opacity-40 disabled:pointer-events-none border border-line bg-panel hover:bg-subtle; }
+  .label { @apply text-xs font-medium uppercase tracking-wider text-muted; }
+  .chip { @apply rounded-full border border-line px-2.5 py-0.5 text-xs text-muted transition hover:text-fg; }
+  .chip[data-on="true"] { @apply border-accent bg-accent/10 text-accent; }
+}
+
+/* Rendered Markdown (preview, AI output, doc viewer) */
+.prose-envoy { line-height: 1.7; font-size: .95rem; }
+.prose-envoy > * + * { margin-top: .75em; }
+.prose-envoy h1 { font-family: var(--font-display); font-size: 1.9rem; line-height: 1.2; }
+.prose-envoy h2 { font-family: var(--font-display); font-size: 1.4rem; margin-top: 1.4em; }
+.prose-envoy h3 { font-weight: 600; margin-top: 1.2em; }
+.prose-envoy ul { list-style: disc; padding-left: 1.4em; }
+.prose-envoy ol { list-style: decimal; padding-left: 1.4em; }
+.prose-envoy blockquote { border-left: 3px solid var(--accent); padding-left: 1em; color: var(--muted); }
+.prose-envoy code { font-family: var(--font-mono); font-size: .85em; background: var(--subtle); padding: .1em .35em; border-radius: 4px; }
+.prose-envoy pre { background: var(--subtle); padding: 1em; border-radius: 10px; overflow-x: auto; }
+.prose-envoy table { border-collapse: collapse; width: 100%; font-size: .9em; }
+.prose-envoy th, .prose-envoy td { border: 1px solid var(--line); padding: .35em .7em; text-align: left; }
+.prose-envoy a { color: var(--accent); text-decoration: underline; }
+.prose-envoy hr { border-color: var(--line); }
+.cite { display: inline-flex; align-items: center; justify-content: center; min-width: 1.15rem; height: 1.15rem; padding: 0 .3rem;
+  margin: 0 1px; border-radius: 6px; font-size: .68rem; font-weight: 600; vertical-align: super; line-height: 1;
+  background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); cursor: pointer; }
+.cite:hover { background: var(--accent); color: var(--accent-fg); }
+
+/* Flashcard flip */
+.flip { perspective: 1400px; }
+.flip-inner { transition: transform .5s cubic-bezier(.2,.8,.2,1); transform-style: preserve-3d; }
+.flip[data-flipped="true"] .flip-inner { transform: rotateY(180deg); }
+.flip-face { backface-visibility: hidden; }
+.flip-back { transform: rotateY(180deg); }
+
+@keyframes rise { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.rise { animation: rise .25s ease-out both; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+
+/* ---------- Position paper preview ---------- */
+/* Paper uses Georgia + Helvetica Neue so the Word export (docx_export.py) can match it exactly. */
+.paper { font-family: Georgia, "Times New Roman", serif; }
+.paper-label { font: 700 .7rem/1 "Helvetica Neue", Arial, sans-serif; letter-spacing: .16em; text-transform: uppercase; color: var(--accent); }
+.paper-title { margin-top: .5rem; font: 400 2.5rem/1.1 Georgia, serif; letter-spacing: -.01em; }
+.paper-chip { max-width: 100%; border-radius: 999px; background: var(--subtle); padding: .3rem .75rem; font: .75rem/1.2 "Helvetica Neue", Arial, sans-serif; }
+.paper-chip dd { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.paper-head { padding-bottom: 1.25rem; margin-bottom: 1.75rem; border-bottom: 2px solid var(--accent); }
+.paper-body { counter-reset: sec; font-size: 1rem; line-height: 1.7; }
+.paper-body h2 { font-family: Georgia, serif; font-weight: 400; letter-spacing: -.01em; }
+.paper-body > p { hyphens: auto; }
+.paper-body h2 { counter-increment: sec; display: flex; align-items: baseline; gap: .6rem; font-size: 1.55rem; margin-top: 1.5em; }
+.paper-body h2::before {
+  content: counter(sec, decimal-leading-zero); font-family: "Helvetica Neue", Arial, sans-serif; font-size: .72rem; font-weight: 700;
+  letter-spacing: .08em; color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent);
+  padding: .2em .5em; border-radius: 6px; transform: translateY(-.25em);
+}
+.paper-body blockquote {
+  position: relative; margin: 1.8em 0; padding: 1.1em 1.4em 1.1em 3.2em; border: 0; border-radius: 14px;
+  background: color-mix(in srgb, var(--accent) 7%, transparent); color: var(--fg);
+  font-family: Georgia, serif; font-size: 1.3rem; line-height: 1.45; font-style: italic;
+}
+.paper-body blockquote::before {
+  content: "\201C"; position: absolute; left: .45em; top: .05em; font-size: 3.2em; line-height: 1; color: var(--accent); opacity: .55;
+}
+.paper-body blockquote p { margin: 0; }
+.paper-body strong { font-weight: 700; background: color-mix(in srgb, var(--accent) 16%, transparent); border-radius: 2px; }
+.paper-body ol { list-style: none; counter-reset: prop; padding: 0; display: grid; gap: .7rem; }
+.paper-body ol > li {
+  counter-increment: prop; position: relative; padding: .85em 1em .85em 3.4em; border: 1px solid var(--line);
+  border-radius: 14px; background: var(--subtle); line-height: 1.6;
+}
+.paper-body ol > li::before {
+  content: counter(prop); position: absolute; left: .9em; top: .8em; width: 1.7em; height: 1.7em; border-radius: 999px;
+  display: grid; place-items: center; font: 700 .8rem "Helvetica Neue", Arial, sans-serif; background: var(--accent); color: var(--accent-fg);
+}
+.paper-body ol > li strong { background: none; color: var(--accent); }
+.paper-body ul > li::marker { color: var(--accent); }
+.cn { font-family: "Helvetica Neue", Arial, sans-serif; background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); border-radius: 4px; padding: 0 .3em; font-size: .8em; font-style: italic; }
+.ref { font-size: .68em; color: var(--accent); font-weight: 600; margin-left: 1px; }

@@ -1,0 +1,178 @@
+"""SQLite storage (stdlib only). One file at data/envoy.db."""
+import json
+import os
+import sqlite3
+from contextlib import contextmanager
+from pathlib import Path
+
+DATA_DIR = Path(os.environ.get("ENVOY_DATA", Path(__file__).resolve().parents[2] / "data"))
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+DB_PATH = DATA_DIR / "envoy.db"
+
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS tasks(
+  id INTEGER PRIMARY KEY, title TEXT NOT NULL, notes TEXT DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'todo' CHECK(status IN ('todo','doing','done')),
+  priority TEXT NOT NULL DEFAULT 'med' CHECK(priority IN ('low','med','high')),
+  position REAL NOT NULL DEFAULT 0, created TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS documents(
+  id INTEGER PRIMARY KEY, name TEXT NOT NULL, markdown TEXT NOT NULL,
+  chunks INTEGER DEFAULT 0, created TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS drafts(
+  id INTEGER PRIMARY KEY, title TEXT NOT NULL DEFAULT 'Untitled draft',
+  content TEXT NOT NULL DEFAULT '', updated TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS clauses(
+  id INTEGER PRIMARY KEY, kind TEXT NOT NULL CHECK(kind IN ('preambulatory','operative','custom')),
+  phrase TEXT NOT NULL, example TEXT DEFAULT '', topic TEXT DEFAULT '');
+CREATE TABLE IF NOT EXISTS flashcards(
+  id INTEGER PRIMARY KEY, front TEXT NOT NULL, back TEXT NOT NULL,
+  deck TEXT DEFAULT 'Rules of Procedure', known INTEGER DEFAULT 0);
+CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS workspaces(
+  id INTEGER PRIMARY KEY, name TEXT NOT NULL, conference TEXT DEFAULT '', dates TEXT DEFAULT '',
+  delegate_country TEXT DEFAULT '', committee TEXT DEFAULT '', topic TEXT DEFAULT '',
+  share_on INTEGER DEFAULT 0, share_code TEXT UNIQUE, created TEXT DEFAULT CURRENT_TIMESTAMP);
+"""
+SCOPED = ("tasks", "documents", "drafts")  # per-workspace tables; clauses & flashcards are shared knowledge
+PROFILE_KEYS = ("delegate_country", "committee", "topic")  # stored on the workspace, not globally
+
+DEFAULT_SETTINGS = {
+    # Profile
+    "delegate_country": "", "committee": "", "topic": "",
+    # Appearance
+    "theme": "system", "accent": "indigo", "font_scale": 1.0,
+    # Timers (seconds)
+    "timer_speaker": 60, "timer_mod_total": 600, "timer_mod_speaker": 45,
+    "timer_unmod": 900, "timer_warning": 10, "timer_sound": True,
+    # Teleprompter
+    "wpm": 150, "prompter_font": 44, "prompter_mirror": False,
+    # AI engine
+    "llm_provider": "ollama", "llm_model": "ollama/llama3.2",
+    "llm_api_base": "http://localhost:11434", "llm_api_key": "",
+    "llm_temperature": 0.4, "llm_max_tokens": 1500,
+    "embed_model": "ollama/nomic-embed-text", "embed_api_base": "http://localhost:11434",
+    # RAG
+    "rag_chunk_size": 1200, "rag_chunk_overlap": 200, "rag_top_k": 6,
+}
+SECRET_KEYS = {"llm_api_key"}
+
+PREAMBULATORY = ["Acknowledging", "Affirming", "Alarmed by", "Approving", "Aware of", "Bearing in mind",
+    "Believing", "Confident", "Congratulating", "Convinced", "Declaring", "Deeply concerned",
+    "Deeply conscious", "Deeply convinced", "Deeply disturbed", "Deeply regretting", "Desiring",
+    "Emphasizing", "Expecting", "Expressing its appreciation", "Fulfilling", "Fully aware",
+    "Further deploring", "Further recalling", "Guided by", "Having adopted", "Having considered",
+    "Having examined", "Having heard", "Having received", "Keeping in mind", "Noting with deep concern",
+    "Noting with satisfaction", "Noting further", "Observing", "Reaffirming", "Realizing", "Recalling",
+    "Recognizing", "Referring", "Seeking", "Taking into account", "Taking note", "Viewing with appreciation",
+    "Welcoming"]
+OPERATIVE = ["Accepts", "Affirms", "Approves", "Authorizes", "Calls", "Calls upon", "Condemns",
+    "Confirms", "Congratulates", "Considers", "Declares accordingly", "Deplores", "Designates",
+    "Draws the attention", "Emphasizes", "Encourages", "Endorses", "Expresses its appreciation",
+    "Expresses its hope", "Further invites", "Further proclaims", "Further recommends", "Further requests",
+    "Further resolves", "Has resolved", "Notes", "Proclaims", "Reaffirms", "Recommends", "Regrets",
+    "Reminds", "Requests", "Solemnly affirms", "Strongly condemns", "Supports", "Takes note of",
+    "Transmits", "Trusts", "Urges"]
+FLASHCARDS = [
+    ("Point of Personal Privilege", "Raised when a delegate experiences personal discomfort that impairs participation (e.g. audibility, temperature). May interrupt a speaker."),
+    ("Point of Order", "Raised when a delegate believes the Chair or a delegate has improperly followed the rules of procedure. May interrupt a speaker only if the error is urgent."),
+    ("Point of Parliamentary Inquiry", "A question to the Chair about the rules of procedure. Cannot interrupt a speaker."),
+    ("Point of Information", "A question to a speaker who has yielded to points of information. Must be phrased as a question."),
+    ("Right of Reply", "Requested when a delegate's national integrity has been impugned by another delegate. Granted at the Chair's discretion."),
+    ("Motion to Open Debate", "Begins formal debate on the agenda. Requires a simple majority."),
+    ("Motion to Set the Agenda", "Chooses which topic is discussed first. Typically two speakers for, two against; simple majority."),
+    ("Motion for a Moderated Caucus", "Must specify total time, speaking time, and purpose. Simple majority. The Chair calls on speakers."),
+    ("Motion for an Unmoderated Caucus", "Must specify total time. Delegates move freely to negotiate and draft. Simple majority."),
+    ("Motion to Close Debate (Cloture)", "Ends debate and moves into voting procedure. Usually two speakers against; requires a two-thirds majority."),
+    ("Motion to Table / Postpone Debate", "Suspends debate on the current topic. Usually requires a two-thirds majority."),
+    ("Motion to Suspend the Meeting", "Pauses the session (e.g. for lunch). Simple majority."),
+    ("Motion to Adjourn the Meeting", "Ends the session for the conference. Usually only in the final session; simple majority."),
+    ("Motion to Introduce a Draft Resolution", "Brings a draft resolution onto the floor once it has the required number of sponsors/signatories and Chair approval."),
+    ("Friendly Amendment", "An amendment agreed to by all sponsors; incorporated without a vote."),
+    ("Unfriendly Amendment", "An amendment not supported by all sponsors; requires signatories and a committee vote."),
+    ("Yield to the Chair", "The speaker gives remaining time back to the Chair."),
+    ("Yield to Another Delegate", "Remaining time is given to another delegate, who may not yield further."),
+    ("Yield to Points of Information", "The speaker accepts questions from delegates for the remaining time."),
+    ("Division of the Question", "Motion to vote on operative clauses of a resolution separately. Procedural vote on how to divide."),
+    ("Roll Call Vote", "Each delegate votes aloud when called: Yes, No, Abstain, Pass (or 'with rights')."),
+    ("Quorum", "The minimum number of members present to conduct business - often one-third to begin debate, a majority to vote on substance."),
+    ("Sponsor vs. Signatory", "Sponsors authored and support the resolution; signatories only wish to see it debated and need not vote for it."),
+    ("Simple vs. Qualified Majority", "Simple majority: more than half of members present and voting. Qualified (two-thirds): needed for cloture and some procedural motions."),
+]
+
+
+def connect() -> sqlite3.Connection:
+    con = sqlite3.connect(DB_PATH, check_same_thread=False)
+    con.row_factory = sqlite3.Row
+    con.execute("PRAGMA journal_mode=WAL")
+    con.execute("PRAGMA foreign_keys=ON")
+    return con
+
+
+@contextmanager
+def tx():
+    con = connect()
+    try:
+        yield con
+        con.commit()
+    finally:
+        con.close()
+
+
+def rows(sql: str, args=()) -> list[dict]:
+    with tx() as c:
+        return [dict(r) for r in c.execute(sql, args).fetchall()]
+
+
+def one(sql: str, args=()) -> dict | None:
+    r = rows(sql, args)
+    return r[0] if r else None
+
+
+def execute(sql: str, args=()) -> int:
+    with tx() as c:
+        return c.execute(sql, args).lastrowid
+
+
+def init() -> None:
+    with tx() as c:
+        c.executescript(SCHEMA)
+        if not c.execute("SELECT 1 FROM clauses LIMIT 1").fetchone():
+            c.executemany("INSERT INTO clauses(kind, phrase) VALUES(?,?)",
+                          [("preambulatory", p) for p in PREAMBULATORY] + [("operative", p) for p in OPERATIVE])
+        if not c.execute("SELECT 1 FROM flashcards LIMIT 1").fetchone():
+            c.executemany("INSERT INTO flashcards(front, back) VALUES(?,?)", FLASHCARDS)
+        for t in SCOPED:  # migrate pre-workspace databases
+            if "workspace_id" not in [r[1] for r in c.execute(f"PRAGMA table_info({t})")]:
+                c.execute(f"ALTER TABLE {t} ADD COLUMN workspace_id INTEGER NOT NULL DEFAULT 1")
+        if not c.execute("SELECT 1 FROM workspaces LIMIT 1").fetchone():
+            old = {r[0]: json.loads(r[1]) for r in c.execute("SELECT key, value FROM settings WHERE key IN ('delegate_country','committee','topic')")}
+            c.execute("INSERT INTO workspaces(id, name, delegate_country, committee, topic) VALUES(1, 'My first conference', ?, ?, ?)",
+                      (old.get("delegate_country", ""), old.get("committee", ""), old.get("topic", "")))
+
+
+def get_settings(ws: int | None = None) -> dict:
+    """Global settings, with the delegation profile taken from workspace `ws`."""
+    stored = {r["key"]: json.loads(r["value"]) for r in rows("SELECT key, value FROM settings")}
+    s = {**DEFAULT_SETTINGS, **stored}
+    if ws and (w := one("SELECT * FROM workspaces WHERE id=?", (ws,))):
+        s.update({k: w[k] for k in PROFILE_KEYS})
+    return s
+
+
+def save_settings(patch: dict, ws: int | None = None) -> dict:
+    prof = {k: str(v) for k, v in patch.items() if k in PROFILE_KEYS}
+    with tx() as c:
+        c.executemany("INSERT INTO settings(key, value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                      [(k, json.dumps(v)) for k, v in patch.items() if k in DEFAULT_SETTINGS and k not in PROFILE_KEYS])
+        if ws and prof:
+            c.execute(f"UPDATE workspaces SET {', '.join(f'{k}=?' for k in prof)} WHERE id=?", (*prof.values(), ws))
+    return get_settings(ws)
+
+
+def first_ws() -> int:
+    return one("SELECT id FROM workspaces ORDER BY id LIMIT 1")["id"]
+
+
+def mask(s: dict) -> dict:
+    """Never send secrets back to the browser in plaintext."""
+    return {k: ("••••" + v[-4:] if k in SECRET_KEYS and v else v) for k, v in s.items()}
