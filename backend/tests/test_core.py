@@ -30,4 +30,17 @@ w2 = db.execute("INSERT INTO workspaces(name) VALUES('HMUN')")
 db.save_settings({"delegate_country": "Brazil", "wpm": 160}, w2)
 assert db.get_settings(w2)["delegate_country"] == "Brazil" and db.get_settings(1)["delegate_country"] != "Brazil"
 assert db.get_settings(1)["wpm"] == 160
+# web research: trusted-source rules, motion parsing, balanced passage selection
+from app import websearch as w
+allow, block, mine = w.rules({"trusted_use_default": True, "trusted_custom": "https://www.MySource.org/x\n-theguardian.com\n# note"})
+assert len(w.builtin()) > 900 and mine == ["mysource.org"]
+assert all(w.trusted(u, allow, block) for u in ("https://news.un.org/a", "https://www.state.gov/b", "https://x.mysource.org/"))
+assert not any(w.trusted(u, allow, block) for u in ("https://www.theguardian.com/a", "https://evil-un.org/", "https://un.org.evil.com/"))
+assert w.site_groups(allow, block, mine)[0] == ["mysource.org"] and all("theguardian.com" not in g for g in w.site_groups(allow, block, mine))
+assert w.subject("THBT social media does more harm than good.") == "social media does more harm than good"
+assert w.subject("This House would ban zoos") == "ban zoos"
+assert w.parse_queries('Sure:\n["a b c", "d e"]') == ["a b c", "d e"] and w.parse_queries("1. x y\n- z w") == ["x y", "z w"]
+ps = [{"url": f"u{i % 3}", "text": str(i)} for i in range(9)]
+picked = w.select(ps, [[9 - i for i in range(9)], [i for i in range(9)]], ["Prop", "Opp"], 6, per_url=2)
+assert [p["angle"] for p in picked] == ["Prop", "Opp"] * 3 and len({p["text"] for p in picked}) == 6
 print("ok")

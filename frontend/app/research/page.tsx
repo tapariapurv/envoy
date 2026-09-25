@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, FileText, Loader2, Lock, MessageSquareText, Square, Trash2, Upload, X } from "lucide-react";
+import { ArrowUp, FileText, Globe, Loader2, Lock, MessageSquareText, Square, Trash2, Upload, X } from "lucide-react";
 import { Empty, ErrorNote, Markdown, PageHeader, Thinking, copy } from "@/components/ui";
+import WebResearch from "@/components/WebResearch";
 import { api, friendly, useAI, type Doc, type Source } from "@/lib/api";
 
 type Msg = { role: "user" | "assistant"; content: string; sources?: Source[] };
@@ -16,6 +17,7 @@ export default function Research() {
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [q, setQ] = useState("");
   const [panel, setPanel] = useState<{ title: string; body: string } | null>(null);
+  const [tab, setTab] = useState<"vault" | "web">("vault");
   const ai = useAI();
   const fileRef = useRef<HTMLInputElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
@@ -57,11 +59,16 @@ export default function Research() {
 
   return (
     <>
-      <PageHeader title="Research Hub" sub="Everything is parsed, embedded, and searched on this machine. Nothing leaves it when using a local model.">
-        <span className="chip flex items-center gap-1"><Lock className="size-3" /> Private vault</span>
+      <PageHeader title="Research Hub" sub={tab === "web" ? "Systematic research on a motion or topic, from trusted sources only." : "Everything is parsed, embedded, and searched on this machine. Nothing leaves it when using a local model."}>
+        <div className="flex gap-1 rounded-xl bg-subtle p-1" role="tablist" aria-label="Research mode">
+          {([["vault", "Private vault", Lock], ["web", "Web research", Globe]] as const).map(([k, l, Icon]) => (
+            <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition ${tab === k ? "bg-panel font-medium shadow-[var(--shadow)]" : "text-muted hover:text-fg"}`}><Icon className="size-3.5" /> {l}</button>
+          ))}
+        </div>
       </PageHeader>
 
-      <div className="grid gap-6 lg:grid-cols-[340px_minmax(0,1fr)]">
+      {tab === "web" ? <WebResearch /> : <div className="grid gap-6 lg:grid-cols-[340px_minmax(0,1fr)]">
         <section className="flex flex-col gap-3">
           <button
             onClick={() => fileRef.current?.click()}
@@ -139,7 +146,7 @@ export default function Research() {
             {msgs.length > 0 && <button type="button" onClick={() => setMsgs([])} className="mt-1 text-xs text-muted hover:text-fg">New conversation</button>}
           </form>
         </section>
-      </div>
+      </div>}
 
       {panel && (
         <div className="fixed inset-0 z-40 flex justify-end bg-black/20 backdrop-blur-[2px]" onClick={() => setPanel(null)}>

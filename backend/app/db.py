@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS workspaces(
   id INTEGER PRIMARY KEY, name TEXT NOT NULL, conference TEXT DEFAULT '', dates TEXT DEFAULT '',
   delegate_country TEXT DEFAULT '', committee TEXT DEFAULT '', topic TEXT DEFAULT '',
   share_on INTEGER DEFAULT 0, share_code TEXT UNIQUE, created TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS web_cache(key TEXT PRIMARY KEY, value TEXT NOT NULL, ts REAL NOT NULL);
 """
 SCOPED = ("tasks", "documents", "drafts")  # per-workspace tables; clauses & flashcards are shared knowledge
 PROFILE_KEYS = ("delegate_country", "committee", "topic")  # stored on the workspace, not globally
@@ -53,8 +54,11 @@ DEFAULT_SETTINGS = {
     "embed_model": "ollama/nomic-embed-text", "embed_api_base": "http://localhost:11434",
     # RAG
     "rag_chunk_size": 1200, "rag_chunk_overlap": 200, "rag_top_k": 6,
+    # Web research
+    "web_search_provider": "duckduckgo", "web_search_key": "",
+    "trusted_use_default": True, "trusted_custom": "",
 }
-SECRET_KEYS = {"llm_api_key"}
+SECRET_KEYS = {"llm_api_key", "web_search_key"}
 
 PREAMBULATORY = ["Acknowledging", "Affirming", "Alarmed by", "Approving", "Aware of", "Bearing in mind",
     "Believing", "Confident", "Congratulating", "Convinced", "Declaring", "Deeply concerned",
@@ -136,6 +140,7 @@ def execute(sql: str, args=()) -> int:
 def init() -> None:
     with tx() as c:
         c.executescript(SCHEMA)
+        c.execute("DELETE FROM web_cache WHERE ts < strftime('%s','now') - 7*86400")
         if not c.execute("SELECT 1 FROM clauses LIMIT 1").fetchone():
             c.executemany("INSERT INTO clauses(kind, phrase) VALUES(?,?)",
                           [("preambulatory", p) for p in PREAMBULATORY] + [("operative", p) for p in OPERATIVE])

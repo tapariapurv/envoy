@@ -5,7 +5,7 @@ import { ErrorNote, PageHeader, toast } from "@/components/ui";
 import { api, download, useAI } from "@/lib/api";
 import { useSettings, type Settings } from "@/lib/settings";
 
-const SECTIONS = [["profile", "Delegation"], ["appearance", "Appearance"], ["timers", "Timers"], ["prompter", "Teleprompter"], ["ai", "AI Engine"], ["rag", "Research & RAG"], ["data", "Data"]];
+const SECTIONS = [["profile", "Delegation"], ["appearance", "Appearance"], ["timers", "Timers"], ["prompter", "Teleprompter"], ["ai", "AI Engine"], ["rag", "Research & RAG"], ["web", "Web Research"], ["data", "Data"]];
 const THEMES = [["system", "System", "#f7f6f3", "#111110"], ["light", "Light", "#f7f6f3", "#ffffff"], ["dark", "Dark", "#111110", "#191918"], ["midnight", "Midnight", "#0b1020", "#111830"], ["sepia", "Sepia", "#f3ecdf", "#fbf6ec"]];
 const ACCENTS = { indigo: "#4f46e5", violet: "#7c3aed", sky: "#0284c7", emerald: "#059669", amber: "#d97706", rose: "#e11d48", slate: "#475569" };
 const PROVIDERS: Record<string, { label: string; model: string; base: string; key: boolean }> = {
@@ -22,8 +22,9 @@ export default function SettingsPage() {
   const [reindexing, setReindexing] = useState(false);
   const test = useAI();
 
+  const [builtin, setBuiltin] = useState<string[] | null>(null);
   const detect = () => api<{ models: string[] }>("/api/health").then((h) => setModels(h.models)).catch(() => setModels([]));
-  useEffect(() => { detect(); }, []);
+  useEffect(() => { detect(); api<{ domains: string[] }>("/api/research/sources").then((r) => setBuiltin(r.domains)).catch(() => {}); }, []);
 
   const local = s.llm_provider === "ollama";
   const chatModels = (models ?? []).filter((m) => !m.includes("embed"));
@@ -144,6 +145,23 @@ export default function SettingsPage() {
             <button onClick={async () => { setReindexing(true); try { await api("/api/docs/reindex", "POST"); toast("Re-indexed all documents"); } catch (e) { toast(String((e as Error).message).slice(0, 80)); } setReindexing(false); }} disabled={reindexing} className="btn-outline w-fit">
               {reindexing ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />} Re-index all documents
             </button>
+          </Section>
+
+          <Section id="web" title="Web Research" desc="Used by Research Hub → Web research. Only pages from trusted sources are read; everything else is discarded.">
+            <Field label="Search engine">
+              <select value={s.web_search_provider} onChange={(e) => set({ web_search_provider: e.target.value })} className="input">
+                <option value="duckduckgo">DuckDuckGo (free, no key)</option>
+                <option value="brave">Brave Search API (more reliable; free key at brave.com/search/api)</option>
+              </select>
+            </Field>
+            {s.web_search_provider === "brave" && <Field label="Brave Search API key" hint="Stored only in your local database."><Text k="web_search_key" type="password" placeholder="BSA…" /></Field>}
+            <Field label="Built-in trusted sources" hint={builtin ? `${builtin.length} domains & rules` : ""}>
+              <Toggle k="trusted_use_default" label="Use Envoy's list: UN system, governments (.gov, .int…), universities, journals, think tanks, NGOs and major news outlets" />
+              {builtin && <details className="text-xs text-muted"><summary className="cursor-pointer">View the list</summary><p className="mt-2 max-h-48 overflow-auto font-mono leading-relaxed">{builtin.join(" · ")}</p></details>}
+            </Field>
+            <Field label="Your sources" hint="One domain per line · prefix with - to block">
+              <textarea value={s.trusted_custom} onChange={(e) => set({ trusted_custom: e.target.value })} rows={5} className="input font-mono text-xs" placeholder={"myschool.edu\nlocalnewspaper.com\n-example-blocked.com"} />
+            </Field>
           </Section>
 
           <Section id="data" title="Data">

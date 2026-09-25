@@ -15,6 +15,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
+from typing import Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
@@ -22,7 +23,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 
-from . import db, docx_export, export, llm, rag
+from . import db, docx_export, export, llm, rag, websearch
 
 MAX_UPLOAD = 50 * 1024 * 1024
 ALLOWED_EXT = {".pdf", ".docx", ".pptx", ".xlsx", ".html", ".htm", ".txt", ".md", ".csv", ".json"}
@@ -396,6 +397,32 @@ async def ai(task: str, r: AIRequest, c: Ctx = Depends(ctx)):
             yield llm.ndjson({"error": f"{type(e).__name__}: {e}"[:500]})
 
     return StreamingResponse(gen(), media_type="application/x-ndjson")
+
+
+# ---------- web research (NDJSON: {step,detail} / {queries} / {sources} / {t} / {error}) ----------
+class WebResearch(BaseModel):
+    text: str = Field(min_length=3, max_length=2000)
+    mode: Literal["debate", "mun"] = "debate"
+    depth: Literal["quick", "standard", "deep"] = "standard"
+
+
+@app.post("/api/research/web")
+async def web_research(r: WebResearch, c: Ctx = Depends(ctx)):
+    s = db.get_settings(c.ws)
+
+    async def gen():
+        try:
+            async for ev in websearch.run(r.text.strip(), r.mode, r.depth, s):
+                yield llm.ndjson(ev)
+        except Exception as e:
+            yield llm.ndjson({"error": str(e) if isinstance(e, ValueError) else f"{type(e).__name__}: {e}"[:500]})
+
+    return StreamingResponse(gen(), media_type="application/x-ndjson")
+
+
+@app.get("/api/research/sources")
+def trusted_sources(_: Ctx = Depends(ctx)):
+    return {"domains": sorted(websearch.builtin())}
 
 
 # ---------- exports ----------

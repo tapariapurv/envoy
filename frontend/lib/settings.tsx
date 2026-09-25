@@ -12,6 +12,7 @@ export const DEFAULTS = {
   llm_temperature: 0.4, llm_max_tokens: 1500,
   embed_model: "ollama/nomic-embed-text", embed_api_base: "http://localhost:11434",
   rag_chunk_size: 1200, rag_chunk_overlap: 200, rag_top_k: 6,
+  web_search_provider: "duckduckgo", web_search_key: "", trusted_use_default: true, trusted_custom: "",
 };
 export type Settings = typeof DEFAULTS;
 
@@ -59,7 +60,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       pending.current = {};
       try {
         const saved = await api<Settings>("/api/settings", "PUT", body);
-        setS((cur) => ({ ...cur, llm_api_key: saved.llm_api_key }));
+        setS((cur) => ({ ...cur, llm_api_key: saved.llm_api_key, web_search_key: saved.web_search_key }));
         setStatus("saved");
         setOffline(false);
       } catch {
