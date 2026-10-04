@@ -130,7 +130,7 @@ export default function SettingsPage() {
                 <div className="mt-2 flex flex-wrap items-center gap-1.5">
                   {models === null ? <span className="text-xs text-muted">Detecting…</span> : chatModels.length ? chatModels.map((m) => (
                     <button key={m} data-on={s.llm_model === `ollama/${m}`} onClick={() => set({ llm_model: `ollama/${m}` })} className="chip">{m}</button>
-                  )) : <span className="text-xs text-danger">Can&apos;t reach Ollama. Install it, run <code>ollama pull llama3.2</code>, then start it so this site may call it: <code>OLLAMA_ORIGINS=&quot;{typeof location === "undefined" ? "" : location.origin}&quot; ollama serve</code> (quit the Ollama app first).</span>}
+                  )) : <span className="text-xs text-danger">Can&apos;t reach Ollama. Install it and run <code>ollama pull llama3.2</code>. Then allow this site: on a Mac run <code>launchctl setenv OLLAMA_ORIGINS &quot;{typeof location === "undefined" ? "" : location.origin}&quot;</code> and quit and reopen Ollama (repeat after a reboot); elsewhere run <code>OLLAMA_ORIGINS=&quot;{typeof location === "undefined" ? "" : location.origin}&quot; ollama serve</code>. If Chrome asks about local network access, click Allow.</span>}
                   <button onClick={detect} className="btn-ghost px-2 py-0.5 text-xs"><RefreshCw className="size-3" /> Refresh</button>
                 </div>
               )}
