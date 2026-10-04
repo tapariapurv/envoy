@@ -8,7 +8,7 @@ import { parse } from "node-html-parser";
 import { signedIn } from "@/lib/verify";
 import TRUSTED from "@/lib/trusted.json";
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36";
 const DEPTH: Record<string, [number, number]> = { quick: [8, 10], standard: [14, 18], deep: [24, 28] }; // pages read, passages
 const MAX_BYTES = 4_000_000, MAX_CHARS = 60_000, PER_DOMAIN = 2;
@@ -46,8 +46,8 @@ function trusted(url: string, allow: Set<string>, block: Set<string>) {
 // ---------- search ----------
 async function ddg(q: string): Promise<Hit[]> {
   let r: Response | null = null;
-  for (let i = 0; i < 3 && r?.status !== 200; i++) { // DDG answers 202 when it throttles; back off and retry
-    if (i) await new Promise((ok) => setTimeout(ok, 1500 * i));
+  for (let i = 0; i < 2 && r?.status !== 200; i++) { // DDG answers 202 when it throttles; back off and retry
+    if (i) await new Promise((ok) => setTimeout(ok, 1000));
     r = await fetch("https://html.duckduckgo.com/html/", { method: "POST", headers: { "User-Agent": UA, "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ q, kl: "wt-wt" }) });
   }
   if (!r) throw new Error("DuckDuckGo didn't answer");
