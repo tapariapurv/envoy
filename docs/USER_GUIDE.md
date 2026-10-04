@@ -244,8 +244,12 @@ With a **cloud provider**, the text of each request (including the document pass
 With **Ollama on this computer**, your browser talks to the model directly and nothing leaves your machine, even on the hosted site. One-time setup:
 
 1. Install [Ollama](https://ollama.com) and run `ollama pull llama3.2`.
-2. Quit the Ollama app, then start it with your Envoy site allowed: `OLLAMA_ORIGINS="https://your-envoy-site" ollama serve`.
-3. In Settings → AI Engine, choose **Ollama (on this computer)** and pick a model chip.
+2. Allow your Envoy site to call Ollama. On a Mac, run this in Terminal, then quit Ollama (menu bar icon → Quit) and reopen it:
+   ```
+   launchctl setenv OLLAMA_ORIGINS "https://envoy-cyan.vercel.app"
+   ```
+   This is cleared when the Mac restarts, so run it again after a reboot. On Windows or Linux, set `OLLAMA_ORIGINS` as an environment variable and restart Ollama, or run `OLLAMA_ORIGINS="https://envoy-cyan.vercel.app" ollama serve`.
+3. In Settings → AI Engine, choose **Ollama (on this computer)**, click **Refresh**, and pick a model chip. If Chrome asks to allow access to devices on your local network, click **Allow**.
 
 ## Keyboard Shortcuts
 

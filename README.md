@@ -80,7 +80,8 @@ Pick a provider in **Settings → AI Engine** and paste your key. It is saved pr
 **Using a local model from the hosted site.** Install Ollama and run `ollama pull llama3.2`. Then quit the Ollama app and start it with your site allowed:
 
 ```bash
-OLLAMA_ORIGINS="https://your-envoy.vercel.app" ollama serve
+launchctl setenv OLLAMA_ORIGINS "https://envoy-cyan.vercel.app"   # macOS; quit and reopen Ollama after. Repeat after a reboot.
+OLLAMA_ORIGINS="https://envoy-cyan.vercel.app" ollama serve       # or run the server directly (any OS)
 ```
 
 Chrome treats `http://localhost` as secure, so the hosted page can call it, and your text never leaves your machine. LM Studio works the same way under "OpenAI-compatible".
