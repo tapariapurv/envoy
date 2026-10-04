@@ -72,7 +72,7 @@ export default function Logistics() {
       <section className="card mb-6 overflow-hidden">
         <div className="flex flex-wrap items-center gap-3 border-b border-line p-3">
           <span className="px-2 font-medium">Paced Teleprompter</span>
-          <select onChange={(e) => { const d = drafts.find((x) => x.id === Number(e.target.value)); if (d) { setText(d.content); reset(); setEditing(false); } e.target.value = ""; }} defaultValue="" className="input w-48" aria-label="Load draft">
+          <select onChange={(e) => { const d = drafts.find((x) => x.id === e.target.value); if (d) { setText(d.content); reset(); setEditing(false); } e.target.value = ""; }} defaultValue="" className="input w-48" aria-label="Load draft">
             <option value="" disabled>Load a draft…</option>
             {drafts.map((d) => <option key={d.id} value={d.id}>{d.title}</option>)}
           </select>

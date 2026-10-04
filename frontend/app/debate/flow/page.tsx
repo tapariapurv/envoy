@@ -63,7 +63,7 @@ export default function FlowPage() {
   return (
     <>
       <PageHeader title="Flow" sub="One column per speech, one row per argument: write each response beside what it answers. Mark anything left unanswered as dropped.">
-        <select value={cur.id} onChange={(e) => { setCur(flows.find((f) => f.id === Number(e.target.value)) ?? null); ai.clear(); }} className="input w-56" aria-label="Choose flow">
+        <select value={cur.id} onChange={(e) => { setCur(flows.find((f) => f.id === e.target.value) ?? null); ai.clear(); }} className="input w-56" aria-label="Choose flow">
           {flows.map((f) => <option key={f.id} value={f.id}>{f.title}</option>)}
         </select>
         <button onClick={create} className="btn-outline"><Plus className="size-4" /> New</button>

@@ -104,6 +104,19 @@ body { font-family: var(--font-sans); }
 
 @keyframes rise { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 .rise { animation: rise .25s ease-out both; }
+/* Page transitions (app/template.tsx remounts on every navigation) and small, GPU-only flourishes. */
+@keyframes page-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.page { animation: page-in .35s cubic-bezier(.2,.8,.2,1) both; }
+.page .card { animation: rise .4s cubic-bezier(.2,.8,.2,1) both; }
+.page .card:nth-child(2) { animation-delay: .04s; } .page .card:nth-child(3) { animation-delay: .08s; } .page .card:nth-child(4) { animation-delay: .12s; } .page .card:nth-child(n+5) { animation-delay: .16s; }
+.btn-primary, .btn-outline { transition: transform .15s ease, box-shadow .15s ease, background-color .15s ease; }
+.btn-primary:not(:disabled):hover, .btn-outline:not(:disabled):hover { transform: translateY(-1px); }
+.btn-primary:not(:disabled):active, .btn-outline:not(:disabled):active { transform: translateY(0) scale(.98); }
+@keyframes float { 50% { transform: translateY(-6px); } }
+.float { animation: float 4s ease-in-out infinite; }
+@keyframes pulse-dot { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--ok, #16a34a) 55%, transparent); } 100% { box-shadow: 0 0 0 6px transparent; } }
+.pulse { animation: pulse-dot 2s ease-out infinite; }
+.hero { background: radial-gradient(60rem 30rem at 50% -10%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%); }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 
 /* ---------- Position paper preview ---------- */

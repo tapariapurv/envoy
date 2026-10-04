@@ -2,70 +2,82 @@
 import { createContext, Fragment, useCallback, useContext, useEffect, useState } from "react";
 import { ArrowRight, Loader2 } from "lucide-react";
 import Logo from "@/components/Logo";
-import { api, ApiError, session } from "./api";
+import { onAuthStateChanged, type User } from "firebase/auth";
+import { toast } from "@/components/ui";
+import { api, session } from "./api";
+import { join } from "./backend";
+import { auth, signIn } from "./firebase";
 
 export type Workspace = {
-  id: number; name: string; conference: string; dates: string;
+  id: string; name: string; owner: string; members: string[]; conference: string; dates: string;
   kind: "mun" | "debate"; delegate_country: string; committee: string; topic: string;
   format: string; side: string; team: string;
-  share_on: number; share_code?: string; guest?: boolean;
+  share_on: boolean; share_code?: string; guest?: boolean;
   counts: { tasks: number; documents: number; drafts: number; rounds: number; flows: number };
 };
 
-type Ctx = { ws: Workspace | null; guest: boolean; list: Workspace[]; switchTo: (id: number) => void; refresh: () => Promise<void>; leave: () => void };
-const WorkspaceCtx = createContext<Ctx>({ ws: null, guest: false, list: [], switchTo: () => {}, refresh: async () => {}, leave: () => {} });
+type Ctx = { ws: Workspace | null; guest: boolean; list: Workspace[]; user: User | null; switchTo: (id: string) => void; refresh: () => Promise<void>; leave: () => void };
+const WorkspaceCtx = createContext<Ctx>({ ws: null, guest: false, list: [], user: null, switchTo: () => {}, refresh: async () => {}, leave: () => {} });
 export const useWorkspace = () => useContext(WorkspaceCtx);
 
-/** Resolves the active workspace; everything below remounts when it changes, so every page refetches its data. */
+/** Signs the user in, then resolves the active workspace; everything below remounts when it changes, so every page refetches. */
 export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const [ws, setWs] = useState<Workspace | null>(null);
   const [list, setList] = useState<Workspace[]>([]);
-  const [state, setState] = useState<"loading" | "ready" | "join">("loading");
-  const [joinError, setJoinError] = useState("");
+  const [user, setUser] = useState<User | null>(null);
+  const [state, setState] = useState<"loading" | "ready" | "signin">("loading");
+  const [error, setError] = useState("");
 
   const refresh = useCallback(async () => {
     try {
+      const code = new URLSearchParams(location.search).get("join");
+      if (code) { // invite link: envoy.app/?join=ABCDE-FGH23
+        history.replaceState(null, "", location.pathname);
+        await join(code).then(() => toast("Joined the workspace")).catch((e) => toast(String(e.message)));
+      }
       const cur = await api<Workspace>("/api/workspace");
-      if (!cur.guest) { session.setWs(cur.id); setList(await api<Workspace[]>("/api/workspaces")); }
-      setWs(cur); setState("ready"); setJoinError("");
+      setList(await api<Workspace[]>("/api/workspaces"));
+      setWs(cur); setState("ready");
     } catch (e) {
-      if (e instanceof ApiError && e.status === 401) {
-        if (session.code) setJoinError("That code didn't work. It may have been changed or sharing was turned off.");
-        session.setCode(null); setState("join");
-      } else setState("ready"); // backend offline: pages show their own offline messages
+      setError(String((e as Error).message)); setState("ready");
     }
   }, []);
 
-  useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => onAuthStateChanged(auth, (u) => {
+    setUser(u);
+    if (u) refresh(); else { setWs(null); setState("signin"); }
+  }), [refresh]);
 
-  const switchTo = useCallback((id: number) => { session.setWs(id); refresh(); }, [refresh]);
-  const leave = useCallback(() => { session.setCode(null); setWs(null); refresh(); }, [refresh]);
+  const switchTo = useCallback((id: string) => { session.setWs(id); refresh(); }, [refresh]);
+  const leave = useCallback(() => {
+    if (ws && confirm(`Leave "${ws.name}"? You'll need a new code to rejoin.`)) api(`/api/workspaces/${ws.id}/leave`, "POST").then(() => { session.setWs(""); refresh(); });
+  }, [ws, refresh]);
 
   if (state === "loading") return <div className="grid min-h-dvh place-items-center"><Loader2 className="size-5 animate-spin text-muted" /></div>;
-  if (state === "join") return <Join error={joinError} onJoin={(code) => { session.setCode(code); refresh(); }} />;
+  if (state === "signin") return <SignIn />;
   return (
-    <WorkspaceCtx.Provider value={{ ws, guest: !!ws?.guest, list, switchTo, refresh, leave }}>
+    <WorkspaceCtx.Provider value={{ ws, guest: !!ws?.guest, list, user, switchTo, refresh, leave }}>
+      {error && !ws && <p role="alert" className="m-4 text-sm text-danger">{error}</p>}
       <Fragment key={ws?.id ?? 0}>{children}</Fragment>
     </WorkspaceCtx.Provider>
   );
 }
 
-function Join({ error, onJoin }: { error: string; onJoin: (code: string) => void }) {
-  const [code, setCode] = useState("");
-  const clean = code.toUpperCase().replace(/[^A-Z0-9]/g, "");
+function SignIn() {
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
   return (
-    <main className="grid min-h-dvh place-items-center px-4">
-      <form onSubmit={(e) => { e.preventDefault(); if (clean.length === 10) onJoin(`${clean.slice(0, 5)}-${clean.slice(5)}`); }} className="card rise w-full max-w-sm p-8 text-center">
-        <Logo className="mx-auto size-14" />
-        <h1 className="mt-4 font-display text-3xl">Join a workspace</h1>
-        <p className="mt-2 text-sm text-muted">Enter the access code your teammate shared with you.</p>
-        <input
-          autoFocus value={code} onChange={(e) => setCode(e.target.value)} placeholder="ABCDE-FGH23" maxLength={11}
-          aria-label="Access code" className="input mt-6 text-center font-mono text-xl tracking-[.2em] uppercase"
-        />
-        {error && <p role="alert" className="mt-3 text-sm text-danger">{error}</p>}
-        <button disabled={clean.length !== 10} className="btn-primary mt-4 w-full py-2.5">Join <ArrowRight className="size-4" /></button>
-      </form>
+    <main className="hero grid min-h-dvh place-items-center px-4">
+      <div className="card rise w-full max-w-sm p-8 text-center">
+        <Logo className="float mx-auto size-16" />
+        <h1 className="mt-4 font-display text-3xl">Envoy</h1>
+        <p className="mt-2 text-sm text-muted">Your AI workspace for Model UN and debate. Research, draft, rehearse and share with your team.</p>
+        <button disabled={busy} onClick={async () => { setBusy(true); setErr(""); try { await signIn(); } catch (e) { setErr(String((e as Error).message).replace("Firebase: ", "")); } setBusy(false); }} className="btn-primary mt-6 w-full py-2.5">
+          {busy ? <Loader2 className="size-4 animate-spin" /> : <ArrowRight className="size-4" />} Continue with Google
+        </button>
+        {err && <p role="alert" className="mt-3 text-sm text-danger">{err}</p>}
+        <p className="mt-4 text-xs text-muted">Free. Your workspaces sync across devices; teammates join with an access code.</p>
+      </div>
     </main>
   );
 }

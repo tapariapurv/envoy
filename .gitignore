@@ -1,4 +1,4 @@
-# Local data (your database, vectors, uploads) — never commit
+# Old local-version data — never commit
 data/
 
 # Environments & dependencies
@@ -13,6 +13,12 @@ __pycache__/
 
 # Build output & caches
 frontend/.next/
+.vercel/
+frontend/.vercel/
+.firebase/
+firebase-debug.log
+*-firebase-adminsdk-*.json
+service-account*.json
 *.tsbuildinfo
 
 # Local config & secrets

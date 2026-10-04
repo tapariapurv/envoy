@@ -7,7 +7,7 @@ import { api, type Card } from "@/lib/api";
 /** Flip-card drill. `deck` limits it to one deck (new cards go there too); without it every deck except Debate shows. */
 export default function Flashcards({ deck: only }: { deck?: string }) {
   const [cards, setCards] = useState<Card[]>([]);
-  const [order, setOrder] = useState<number[]>([]);
+  const [order, setOrder] = useState<string[]>([]);
   const [i, setI] = useState(0);
   const [flipped, setFlipped] = useState(false);
   const [onlyNew, setOnlyNew] = useState(false);

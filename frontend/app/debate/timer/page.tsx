@@ -67,7 +67,6 @@ function SpeechTimer() {
 
 function MotionBank() {
   const { set } = useSettings();
-  const { guest } = useWorkspace();
   const router = useRouter();
   const [items, setItems] = useState<Motion[]>([]);
   const [q, setQ] = useState("");
@@ -96,7 +95,7 @@ function MotionBank() {
             <div key={m.id} className="card group flex items-center gap-3 px-4 py-3">
               <div className="min-w-0 flex-1"><div className="text-sm font-medium">{m.text}</div>{m.theme && <div className="text-[10px] uppercase tracking-wider text-muted">{m.theme}</div>}</div>
               <button onClick={() => use(m)} className="btn-ghost text-accent">Prep this</button>
-              {!guest && <button onClick={() => { api(`/api/motions/${m.id}`, "DELETE"); setItems((x) => x.filter((y) => y.id !== m.id)); }} className="text-muted opacity-0 hover:text-danger group-hover:opacity-100 focus:opacity-100" aria-label="Delete motion"><Trash2 className="size-3.5" /></button>}
+              {<button onClick={() => { api(`/api/motions/${m.id}`, "DELETE"); setItems((x) => x.filter((y) => y.id !== m.id)); }} className="text-muted opacity-0 hover:text-danger group-hover:opacity-100 focus:opacity-100" aria-label="Delete motion"><Trash2 className="size-3.5" /></button>}
             </div>
           ))}
           {!shown.length && <Empty icon={Search} title="No motions match" />}

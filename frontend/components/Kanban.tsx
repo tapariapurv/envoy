@@ -14,13 +14,13 @@ const NEXT_PRI: Record<Task["priority"], Task["priority"]> = { low: "med", med: 
 
 export default function Kanban() {
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [drag, setDrag] = useState<number | null>(null);
+  const [drag, setDrag] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
   const [err, setErr] = useState("");
 
   useEffect(() => { api<Task[]>("/api/tasks").then(setTasks).catch((e) => setErr(String(e.message))); }, []);
 
-  const update = (id: number, p: Partial<Task>) => {
+  const update = (id: string, p: Partial<Task>) => {
     setTasks((ts) => ts.map((t) => (t.id === id ? { ...t, ...p } : t)).sort((a, b) => a.position - b.position));
     api(`/api/tasks/${id}`, "PATCH", p).catch((e) => setErr(String(e.message)));
   };
@@ -28,10 +28,10 @@ export default function Kanban() {
     const t = await api<Task>("/api/tasks", "POST", { title, status });
     setTasks((ts) => [...ts, t]);
   };
-  const remove = (id: number) => { setTasks((ts) => ts.filter((t) => t.id !== id)); api(`/api/tasks/${id}`, "DELETE"); };
+  const remove = (id: string) => { setTasks((ts) => ts.filter((t) => t.id !== id)); api(`/api/tasks/${id}`, "DELETE"); };
 
   /** Drop before `beforeId` (or at column end): position = midpoint of neighbours. */
-  const drop = (status: Task["status"], beforeId: number | null) => {
+  const drop = (status: Task["status"], beforeId: string | null) => {
     if (drag === null || drag === beforeId) return setDrag(null);
     const col = tasks.filter((t) => t.status === status && t.id !== drag);
     const i = beforeId === null ? col.length : col.findIndex((t) => t.id === beforeId);

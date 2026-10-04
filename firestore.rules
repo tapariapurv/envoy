@@ -1,0 +1,45 @@
+rules_version = '2';
+// Envoy access model: users own their settings/clauses/cards/motions; workspace data is shared by its members.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function me() { return request.auth.uid; }
+    function ws(id) { return get(/databases/$(database)/documents/workspaces/$(id)).data; }
+    function member(id) { return signedIn() && me() in ws(id).members; }
+    function changes() { return request.resource.data.diff(resource.data).affectedKeys(); }
+
+    match /users/{uid}/{document=**} {
+      allow read, write: if signedIn() && me() == uid;
+    }
+
+    match /workspaces/{id} {
+      allow read: if signedIn() && me() in resource.data.members;
+      allow create: if signedIn() && request.resource.data.owner == me() && request.resource.data.members == [me()];
+      allow delete: if signedIn() && resource.data.owner == me();
+      allow update: if signedIn() && (
+        // owner: anything but ownership
+        (resource.data.owner == me() && request.resource.data.owner == me())
+        // members: profile fields only, or leave (remove only themselves)
+        || (me() in resource.data.members && changes().hasOnly(['delegate_country', 'committee', 'topic', 'format', 'side', 'team']))
+        || (me() in resource.data.members && changes().hasOnly(['members'])
+            && request.resource.data.members.toSet() == resource.data.members.toSet().difference([me()].toSet()))
+        // join: add only yourself, presenting the live access code
+        || (resource.data.share_on == true && resource.data.share_code != ''
+            && request.resource.data.joinCode == resource.data.share_code
+            && changes().hasOnly(['members', 'joinCode'])
+            && request.resource.data.members.toSet() == resource.data.members.toSet().union([me()].toSet()))
+      );
+
+      match /{col}/{doc} {
+        allow read, write: if col in ['tasks', 'documents', 'drafts', 'rounds', 'flows'] && member(id);
+      }
+    }
+
+    // Access codes: readable only by exact code (no listing), written by the workspace owner.
+    match /codes/{code} {
+      allow get: if signedIn();
+      allow create, update: if signedIn() && ws(request.resource.data.ws).owner == me();
+      allow delete: if signedIn() && ws(resource.data.ws).owner == me();
+    }
+  }
+}

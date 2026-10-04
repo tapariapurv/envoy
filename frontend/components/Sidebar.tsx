@@ -3,7 +3,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Briefcase, Hourglass, Library, LayoutGrid, ListTree, MonitorPlay, PenLine, ScrollText, Settings2, Swords, Timer, Trophy } from "lucide-react";
-import { api } from "@/lib/api";
+import { isLocal } from "@/lib/ai";
 import { useSettings } from "@/lib/settings";
 import Logo from "./Logo";
 import ThemeSwitcher from "./ThemeSwitcher";
@@ -32,13 +32,11 @@ const NAV = {
 export const HOME = { mun: "/", debate: "/debate" };
 const SHARED = ["/research", "/drafting", "/workspaces", "/settings"];
 
-type Health = { ollama: boolean; model: string } | null;
-
 export default function Sidebar() {
   const path = usePathname();
   const router = useRouter();
   const { s } = useSettings();
-  const { ws, guest, list, switchTo } = useWorkspace();
+  const { ws, list, switchTo } = useWorkspace();
   const kind = ws?.kind ?? "mun";
 
   // Each mode has its own pages; landing on the other mode's page (e.g. after switching workspace) goes home.
@@ -52,18 +50,19 @@ export default function Sidebar() {
     const target = list.find((w) => w.kind === k); // list is newest first
     if (target) { switchTo(target.id); router.push(HOME[k]); } else router.push(`/workspaces?new=1&kind=${k}`);
   };
-  const [health, setHealth] = useState<Health | "down">(null);
-
+  // Local engines are checked from the browser; cloud providers just need a key.
+  const local = isLocal(s);
+  const [up, setUp] = useState<boolean | null>(null);
   useEffect(() => {
-    const check = () => api<Health>("/api/health").then(setHealth).catch(() => setHealth("down"));
+    if (!local) return setUp(!!s.llm_api_key);
+    const check = () => fetch(`${s.llm_api_base.replace(/\/v1\/?$/, "").replace(/\/+$/, "")}${s.llm_provider === "ollama" ? "/api/tags" : "/models"}`).then((r) => setUp(r.ok)).catch(() => setUp(false));
     check();
     const id = setInterval(check, 30_000);
     return () => clearInterval(id);
-  }, [s.llm_model, s.llm_api_base]);
-
-  const local = s.llm_model.startsWith("ollama");
-  const ok = health !== "down" && health !== null && (health.ollama || !local);
-  const label = health === "down" ? "Backend offline" : !health ? "Connecting…" : local && !health.ollama ? "Ollama not running" : s.llm_model.replace(/^ollama(_chat)?\//, "");
+  }, [local, s.llm_api_base, s.llm_provider, s.llm_api_key]);
+  const ok = !!up;
+  const label = up === null ? "Connecting…" : !up ? (local ? "Local model not reachable" : "Add an API key") : s.llm_model.replace(/^[^/]+\//, "");
+  const health = up;
 
   const item = (href: string, active: boolean) =>
     `flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition whitespace-nowrap ${active ? "bg-panel text-fg font-medium shadow-[var(--shadow)] border border-line" : "text-muted hover:text-fg hover:bg-subtle border border-transparent"}`;
@@ -79,7 +78,7 @@ export default function Sidebar() {
         <span className={`md:hidden ${ws ? "" : "ml-auto"}`}><ThemeSwitcher compact /></span>
       </div>
 
-      {!guest && (
+      {(
         <div className="flex gap-1 rounded-xl bg-subtle p-1 md:mx-2" role="tablist" aria-label="Mode">
           {([["mun", "MUN"], ["debate", "Debate"]] as const).map(([k, l]) => (
             <button key={k} role="tab" aria-selected={kind === k} onClick={() => setMode(k)}
@@ -110,7 +109,7 @@ export default function Sidebar() {
           <Settings2 className="size-4" /> Settings
         </Link>
         <Link href="/settings#ai" className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-muted hover:bg-subtle" title="AI engine status">
-          <span className={`size-2 rounded-full ${ok ? "bg-ok" : health === null ? "bg-muted" : "bg-danger"}`} />
+          <span className={`size-2 rounded-full ${ok ? "bg-ok" : health === null ? "bg-muted" : "bg-danger"} ${ok ? "pulse" : ""}`} />
           <span className="truncate">{label}</span>
           <span className="ml-auto rounded bg-subtle px-1.5 py-0.5 text-[10px] uppercase tracking-wide">{local ? "Local" : "Cloud"}</span>
         </Link>

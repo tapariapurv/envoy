@@ -36,7 +36,7 @@ export default function Opponent() {
             <label className="flex flex-col gap-1">
               <span className="flex items-center justify-between"><span className="label">Your position{s.delegate_country && ` (${s.delegate_country})`}</span>
                 {drafts.length > 0 && (
-                  <select onChange={(e) => { const d = drafts.find((x) => x.id === Number(e.target.value)); if (d) setPosition(d.content); e.target.value = ""; }} defaultValue="" className="bg-transparent text-xs text-accent outline-none">
+                  <select onChange={(e) => { const d = drafts.find((x) => x.id === e.target.value); if (d) setPosition(d.content); e.target.value = ""; }} defaultValue="" className="bg-transparent text-xs text-accent outline-none">
                     <option value="" disabled>Load from draft…</option>
                     {drafts.map((d) => <option key={d.id} value={d.id}>{d.title}</option>)}
                   </select>

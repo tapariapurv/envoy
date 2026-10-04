@@ -10,37 +10,38 @@ import { useWorkspace } from "@/lib/workspace";
 const SECTIONS = [["profile", "Profile"], ["appearance", "Appearance"], ["timers", "Timers"], ["prompter", "Teleprompter"], ["ai", "AI Engine"], ["rag", "Research & RAG"], ["web", "Web Research"], ["data", "Data"]];
 const THEMES = [["system", "System", "#f7f6f3", "#111110"], ["light", "Light", "#f7f6f3", "#ffffff"], ["dark", "Dark", "#111110", "#191918"], ["midnight", "Midnight", "#0b1020", "#111830"], ["sepia", "Sepia", "#f3ecdf", "#fbf6ec"]];
 const ACCENTS = { indigo: "#4f46e5", violet: "#7c3aed", sky: "#0284c7", emerald: "#059669", amber: "#d97706", rose: "#e11d48", slate: "#475569" };
-const PROVIDERS: Record<string, { label: string; model: string; base: string; key: boolean }> = {
-  ollama: { label: "Ollama (local)", model: "ollama/llama3.2", base: "http://localhost:11434", key: false },
-  openai: { label: "OpenAI", model: "openai/gpt-4.1-mini", base: "", key: true },
-  anthropic: { label: "Anthropic", model: "anthropic/claude-sonnet-5", base: "", key: true },
-  gemini: { label: "Google Gemini", model: "gemini/gemini-2.5-flash", base: "", key: true },
-  openai_compatible: { label: "OpenAI-compatible (LM Studio, vLLM…)", model: "openai/local-model", base: "http://localhost:1234/v1", key: false },
+const PROVIDERS: Record<string, { label: string; model: string; base: string; key: boolean; get?: string }> = {
+  gemini: { label: "Google Gemini (free tier)", model: "gemini/gemini-2.5-flash", base: "", key: true, get: "https://aistudio.google.com/apikey" },
+  groq: { label: "Groq (free tier)", model: "groq/llama-3.3-70b-versatile", base: "", key: true, get: "https://console.groq.com/keys" },
+  openrouter: { label: "OpenRouter", model: "openrouter/meta-llama/llama-3.3-70b-instruct:free", base: "", key: true, get: "https://openrouter.ai/keys" },
+  openai: { label: "OpenAI", model: "openai/gpt-4.1-mini", base: "", key: true, get: "https://platform.openai.com/api-keys" },
+  anthropic: { label: "Anthropic", model: "anthropic/claude-sonnet-5", base: "", key: true, get: "https://console.anthropic.com/settings/keys" },
+  ollama: { label: "Ollama (on this computer)", model: "ollama/llama3.2", base: "http://localhost:11434", key: false },
+  openai_compatible: { label: "OpenAI-compatible (LM Studio…)", model: "openai/local-model", base: "http://localhost:1234/v1", key: false },
 };
 
 export default function SettingsPage() {
   const { s, set, replace, status, offline } = useSettings();
   const debate = useWorkspace().ws?.kind === "debate";
   const [models, setModels] = useState<string[] | null>(null);
-  const [reindexing, setReindexing] = useState(false);
   const test = useAI();
 
   const [builtin, setBuiltin] = useState<string[] | null>(null);
-  const detect = () => api<{ models: string[] }>("/api/health").then((h) => setModels(h.models)).catch(() => setModels([]));
-  useEffect(() => { detect(); api<{ domains: string[] }>("/api/research/sources").then((r) => setBuiltin(r.domains)).catch(() => {}); }, []);
+  const detect = () => fetch(`${s.llm_api_base.replace(/\/+$/, "")}/api/tags`).then((r) => r.json()).then((h) => setModels(h.models.map((m: { name: string }) => m.name))).catch(() => setModels([]));
+  useEffect(() => { if (s.llm_provider === "ollama") detect(); }, [s.llm_provider, s.llm_api_base]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { api<{ domains: string[] }>("/api/research/sources").then((r) => setBuiltin(r.domains)).catch(() => {}); }, []);
 
   const local = s.llm_provider === "ollama";
   const chatModels = (models ?? []).filter((m) => !m.includes("embed"));
-  const embedModels = (models ?? []).filter((m) => m.includes("embed"));
 
   return (
     <>
-      <PageHeader title="Settings" sub="Everything is stored locally in data/envoy.db.">
+      <PageHeader title="Settings" sub="Saved to your account and synced across devices. Profile fields belong to the current workspace.">
         <span className="flex items-center gap-1.5 text-sm text-muted" aria-live="polite">
-          {status === "saving" ? <><Loader2 className="size-3.5 animate-spin" /> Saving</> : status === "saved" ? <><Check className="size-3.5 text-ok" /> All changes saved</> : status === "error" ? <span className="text-danger">Couldn&apos;t save — is the backend running?</span> : null}
+          {status === "saving" ? <><Loader2 className="size-3.5 animate-spin" /> Saving</> : status === "saved" ? <><Check className="size-3.5 text-ok" /> All changes saved</> : status === "error" ? <span className="text-danger">Couldn&apos;t save — check your connection</span> : null}
         </span>
       </PageHeader>
-      {offline && <div className="mb-4"><ErrorNote msg="The backend is offline, so settings can't be loaded or saved. Start everything with `npm run dev` from the project root." /></div>}
+      {offline && <div className="mb-4"><ErrorNote msg="Settings couldn't be loaded. Check your connection and reload." /></div>}
 
       <div className="grid gap-8 lg:grid-cols-[180px_minmax(0,1fr)]">
         <nav className="sticky top-8 hidden h-fit flex-col gap-0.5 lg:flex">
@@ -111,7 +112,7 @@ export default function SettingsPage() {
             <Field label="Mirror"><Toggle k="prompter_mirror" label="Mirror text by default (for beam-splitter glass)" /></Field>
           </Section>
 
-          <Section id="ai" title="AI Engine" desc="All requests are routed through LiteLLM. With Ollama nothing leaves your Mac; cloud providers receive the text you send them.">
+          <Section id="ai" title="AI Engine" desc="Bring your own API key (Gemini and Groq have free tiers), or run a model on your own computer with Ollama. Cloud providers receive the text you send them; local models keep it on your machine.">
             <Field label="Provider">
               <div className="grid gap-2 sm:grid-cols-2">
                 {Object.entries(PROVIDERS).map(([id, p]) => (
@@ -122,21 +123,21 @@ export default function SettingsPage() {
                 ))}
               </div>
             </Field>
-            <Field label="Model" hint="LiteLLM model string, e.g. ollama/llama3.2 or anthropic/claude-sonnet-5">
+            <Field label="Model" hint="provider/model, e.g. gemini/gemini-2.5-flash, groq/llama-3.3-70b-versatile or ollama/llama3.2">
               <Text k="llm_model" list="chat-models" />
               <datalist id="chat-models">{chatModels.map((m) => <option key={m} value={`ollama/${m}`} />)}</datalist>
               {local && (
                 <div className="mt-2 flex flex-wrap items-center gap-1.5">
                   {models === null ? <span className="text-xs text-muted">Detecting…</span> : chatModels.length ? chatModels.map((m) => (
                     <button key={m} data-on={s.llm_model === `ollama/${m}`} onClick={() => set({ llm_model: `ollama/${m}` })} className="chip">{m}</button>
-                  )) : <span className="text-xs text-danger">No Ollama models found. Run <code>ollama pull llama3.2</code>.</span>}
+                  )) : <span className="text-xs text-danger">Can&apos;t reach Ollama. Install it, run <code>ollama pull llama3.2</code>, then start it so this site may call it: <code>OLLAMA_ORIGINS=&quot;{typeof location === "undefined" ? "" : location.origin}&quot; ollama serve</code> (quit the Ollama app first).</span>}
                   <button onClick={detect} className="btn-ghost px-2 py-0.5 text-xs"><RefreshCw className="size-3" /> Refresh</button>
                 </div>
               )}
             </Field>
             {(local || s.llm_provider === "openai_compatible") && <Field label="API base URL"><Text k="llm_api_base" /></Field>}
             {PROVIDERS[s.llm_provider]?.key !== false || s.llm_provider === "openai_compatible" ? (
-              <Field label="API key" hint="Stored only in your local database; never shown again in full."><Text k="llm_api_key" type="password" placeholder="sk-…" /></Field>
+              <Field label="API key" hint={<>Saved privately to your account (only you can read it); never shared with teammates.{PROVIDERS[s.llm_provider]?.get && <> Get one: <a className="text-accent underline" href={PROVIDERS[s.llm_provider].get} target="_blank" rel="noopener">{new URL(PROVIDERS[s.llm_provider].get!).host}</a></>}</>}><Text k="llm_api_key" type="password" placeholder="sk-…" /></Field>
             ) : null}
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Creativity (temperature)" hint={String(s.llm_temperature)}><Range k="llm_temperature" min={0} max={1.2} step={0.1} /></Field>
@@ -151,33 +152,25 @@ export default function SettingsPage() {
             <ErrorNote msg={test.error} />
           </Section>
 
-          <Section id="rag" title="Research & RAG" desc="How documents are split and retrieved. Re-index after changing these so existing documents use the new parameters.">
-            <Field label="Embedding model" hint="Must stay the same between indexing and searching. Local: ollama/nomic-embed-text">
-              <Text k="embed_model" list="embed-models" />
-              <datalist id="embed-models">{embedModels.map((m) => <option key={m} value={`ollama/${m.replace(/:latest$/, "")}`} />)}</datalist>
-            </Field>
-            {s.embed_model.startsWith("ollama") && <Field label="Embedding API base"><Text k="embed_api_base" /></Field>}
+          <Section id="rag" title="Research & RAG" desc="How documents are split and matched to your questions (keyword ranking in your browser). Changes apply immediately.">
             <div className="grid gap-4 sm:grid-cols-3">
               <Field label="Chunk size (chars)"><Num k="rag_chunk_size" min={300} max={6000} step={100} /></Field>
               <Field label="Chunk overlap (chars)"><Num k="rag_chunk_overlap" min={0} max={1500} step={50} /></Field>
               <Field label="Passages per answer"><Num k="rag_top_k" min={1} max={20} /></Field>
             </div>
             <p className="text-xs text-muted">Smaller chunks = more precise citations; larger chunks = more context per passage. 800–1500 suits most UN documents.</p>
-            <button onClick={async () => { setReindexing(true); try { await api("/api/docs/reindex", "POST"); toast("Re-indexed all documents"); } catch (e) { toast(String((e as Error).message).slice(0, 80)); } setReindexing(false); }} disabled={reindexing} className="btn-outline w-fit">
-              {reindexing ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />} Re-index all documents
-            </button>
           </Section>
 
           <Section id="web" title="Web Research" desc="Used by Research Hub → Web research. Only pages from trusted sources are read; everything else is discarded.">
             <Field label="Search engine">
               <select value={s.web_search_provider} onChange={(e) => set({ web_search_provider: e.target.value })} className="input">
-                <option value="duckduckgo">DuckDuckGo (free, no key)</option>
+                <option value="duckduckgo">DuckDuckGo (free, no key; may be rate limited)</option>
                 <option value="brave">Brave Search API (more reliable; free key at brave.com/search/api)</option>
                 <option value="serper">Google via Serper (your own key from serper.dev)</option>
               </select>
             </Field>
-            {s.web_search_provider === "serper" && <Field label="Serper API key" hint="Required for Google results. Get one at serper.dev; stored only in your local database and never shared with teammates."><Text k="serper_key" type="password" placeholder="Your Serper key" /></Field>}
-            {s.web_search_provider === "brave" && <Field label="Brave Search API key" hint="Stored only in your local database."><Text k="web_search_key" type="password" placeholder="BSA…" /></Field>}
+            {s.web_search_provider === "serper" && <Field label="Serper API key" hint="Required for Google results. Get one at serper.dev; saved privately to your account."><Text k="serper_key" type="password" placeholder="Your Serper key" /></Field>}
+            {s.web_search_provider === "brave" && <Field label="Brave Search API key" hint="Saved privately to your account."><Text k="web_search_key" type="password" placeholder="BSA…" /></Field>}
             <Field label="Built-in trusted sources" hint={builtin ? `${builtin.length} domains & rules` : ""}>
               <Toggle k="trusted_use_default" label="Use Envoy's list: UN system, governments (.gov, .int…), universities, journals, think tanks, NGOs and major news outlets" />
               {builtin && <details className="text-xs text-muted"><summary className="cursor-pointer">View the list</summary><p className="mt-2 max-h-48 overflow-auto font-mono leading-relaxed">{builtin.join(" · ")}</p></details>}
@@ -192,7 +185,7 @@ export default function SettingsPage() {
               <button onClick={() => download("/api/export")} className="btn-outline">Export offline binder</button>
               <button onClick={async () => { if (confirm("Reset all settings to defaults? Your documents, drafts and tasks are kept.")) { replace(await api<Settings>("/api/settings/reset", "POST")); toast("Settings reset"); } }} className="btn-ghost text-danger">Reset settings</button>
             </div>
-            <p className="text-xs text-muted">All data lives in the <code>data/</code> folder of the project. Back it up by copying that folder.</p>
+            <p className="text-xs text-muted">Your data is stored in Firebase under your Google account and cached in this browser for offline use. The binder is a single HTML file you can keep as a backup.</p>
           </Section>
         </div>
       </div>
@@ -210,7 +203,7 @@ function Section({ id, title, desc, children }: { id: string; title: string; des
   );
 }
 
-function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+function Field({ label, hint, children }: { label: string; hint?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-baseline justify-between gap-2"><span className="text-sm font-medium">{label}</span>{hint && <span className="text-xs text-muted">{hint}</span>}</div>

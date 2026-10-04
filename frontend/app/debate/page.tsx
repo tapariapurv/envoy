@@ -14,7 +14,7 @@ export default function RoundLog() {
   const { s } = useSettings();
   const [rounds, setRounds] = useState<Round[]>([]);
   const [f, setF] = useState(BLANK);
-  const [open, setOpen] = useState<number | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
   const [err, setErr] = useState("");
   const F = fmt(s.format);
 
@@ -25,7 +25,7 @@ export default function RoundLog() {
     const r = await api<Round>("/api/rounds", "POST", { ...f, speaks, name: f.name || `Round ${rounds.length + 1}`, motion: f.motion || s.topic });
     setRounds((x) => [r, ...x]); setF(BLANK);
   };
-  const remove = (id: number) => { api(`/api/rounds/${id}`, "DELETE"); setRounds((x) => x.filter((r) => r.id !== id)); };
+  const remove = (id: string) => { api(`/api/rounds/${id}`, "DELETE"); setRounds((x) => x.filter((r) => r.id !== id)); };
 
   const bp = (s.format || "bp") === "bp";
   const wins = rounds.filter((r) => r.result === "Win").length, losses = rounds.filter((r) => r.result === "Loss").length;

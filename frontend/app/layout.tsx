@@ -10,7 +10,7 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
 const heading = Geist({ subsets: ["latin"], variable: "--font-heading", display: "swap" });
 
-export const metadata: Metadata = { title: "Envoy — Model UN & Debate Workspace", description: "Private, local-first AI workspace for Model UN delegates and debaters." };
+export const metadata: Metadata = { title: "Envoy — Model UN & Debate Workspace", description: "Free AI workspace for Model UN delegates and debaters: research, drafting, rehearsal and team sharing." };
 export const viewport: Viewport = { themeColor: [{ media: "(prefers-color-scheme: dark)", color: "#111110" }, { color: "#f7f6f3" }] };
 
 // Applies the cached theme before first paint to avoid a light/dark flash.
@@ -29,9 +29,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Sidebar />
             <main className="min-w-0 flex-1 px-4 py-6 md:px-10 md:py-8">{children}</main>
           </div>
-          <Toaster />
         </SettingsProvider>
         </WorkspaceProvider>
+        <Toaster />
       </body>
     </html>
   );

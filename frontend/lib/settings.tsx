@@ -1,19 +1,10 @@
 "use client";
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
-import { api, apiFetch } from "./api";
+import { api } from "./api";
+import seed from "./seed.json";
 
-// Mirrors backend DEFAULT_SETTINGS so the UI works before the first fetch / when offline.
-export const DEFAULTS = {
-  delegate_country: "", committee: "", topic: "", format: "", side: "", team: "",
-  theme: "system", accent: "indigo", font_scale: 1,
-  timer_speaker: 60, timer_mod_total: 600, timer_mod_speaker: 45, timer_unmod: 900, timer_warning: 10, timer_sound: true,
-  wpm: 150, prompter_font: 44, prompter_mirror: false,
-  llm_provider: "ollama", llm_model: "ollama/llama3.2", llm_api_base: "http://localhost:11434", llm_api_key: "",
-  llm_temperature: 0.4, llm_max_tokens: 1500,
-  embed_model: "ollama/nomic-embed-text", embed_api_base: "http://localhost:11434",
-  rag_chunk_size: 1200, rag_chunk_overlap: 200, rag_top_k: 6,
-  web_search_provider: "duckduckgo", web_search_key: "", serper_key: "", trusted_use_default: true, trusted_custom: "",
-};
+// Defaults live in seed.json (shared with lib/backend.ts).
+export const DEFAULTS = seed.defaults;
 export type Settings = typeof DEFAULTS;
 
 type Ctx = { s: Settings; set: (p: Partial<Settings>) => void; replace: (s: Settings) => void; status: "idle" | "saving" | "saved" | "error"; offline: boolean };
@@ -73,7 +64,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const flush = () => {
       if (!Object.keys(pending.current).length) return;
-      apiFetch("/api/settings", { method: "PUT", keepalive: true, headers: { "Content-Type": "application/json" }, body: JSON.stringify(pending.current) });
+      api("/api/settings", "PUT", pending.current).catch(() => {}); // Firestore queues it offline and syncs on the next visit
       pending.current = {};
     };
     addEventListener("pagehide", flush);

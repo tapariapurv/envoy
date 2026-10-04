@@ -2,7 +2,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, Copy, ExternalLink, FilePlus2, Globe, Library, Loader2, Search, ShieldCheck, Square, X } from "lucide-react";
 import { Empty, ErrorNote, Markdown, copy, toast } from "@/components/ui";
-import { api, apiFetch, friendly, session } from "@/lib/api";
+import { api, friendly, session } from "@/lib/api";
+import { webResearch } from "@/lib/ai";
 import { useSettings } from "@/lib/settings";
 import { useWorkspace } from "@/lib/workspace";
 
@@ -10,7 +11,7 @@ type WebSource = { n: number; url: string; domain: string; title: string; text: 
 type Report = { text: string; mode: Mode; md: string; sources: WebSource[]; queries: string[] };
 type Mode = "debate" | "mun";
 const STEPS = [["plan", "Plan searches"], ["search", "Search trusted sources"], ["read", "Read sources"], ["rank", "Rank evidence"], ["write", "Write report"]] as const;
-const KEY = () => `envoy-webreport-${session.code || session.ws || "0"}`;
+const KEY = () => `envoy-webreport-${session.ws || "0"}`;
 
 export default function WebResearch() {
   const { s } = useSettings();
@@ -35,25 +36,12 @@ export default function WebResearch() {
     const rep: Report = { text, mode, md: "", sources: [], queries: [] };
     setBusy(true); setError(""); setSteps({}); setCurrent(""); setR({ ...rep });
     try {
-      const res = await apiFetch("/api/research/web", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, mode, depth }), signal: ac.signal });
-      if (!res.ok || !res.body) throw new Error(await res.text());
-      const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
-      let buf = "";
-      for (;;) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        const lines = (buf += value).split("\n");
-        buf = lines.pop()!;
-        for (const line of lines) {
-          if (!line) continue;
-          const m = JSON.parse(line);
-          if (m.step) { setCurrent(m.step); setSteps((x) => ({ ...x, [m.step]: m.detail })); }
-          if (m.queries) rep.queries = m.queries;
-          if (m.sources) rep.sources = m.sources;
-          if (m.t) rep.md += m.t;
-          if (m.error) setError(friendly(m.error));
-          if (m.queries || m.sources || m.t) setR({ ...rep });
-        }
+      for await (const m of webResearch(text, mode, depth, s, ac.signal)) {
+        if (m.step) { setCurrent(m.step); setSteps((x) => ({ ...x, [m.step!]: m.detail ?? "" })); }
+        if (m.queries) rep.queries = m.queries;
+        if (m.sources) rep.sources = m.sources as WebSource[];
+        if (m.t) rep.md += m.t;
+        if (m.queries || m.sources || m.t) setR({ ...rep });
       }
       if (rep.md) try { localStorage.setItem(KEY(), JSON.stringify(rep)); } catch {}
     } catch (e) {

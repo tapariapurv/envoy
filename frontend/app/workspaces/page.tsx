@@ -1,11 +1,13 @@
 "use client";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
-import { ArrowRight, Copy, Pencil, Plus, RefreshCw, Trash2, Users, Wifi, X } from "lucide-react";
+import { Suspense, useState } from "react";
+import { ArrowRight, Copy, KeyRound, Link2, Loader2, LogOut, Mail, Pencil, Plus, RefreshCw, Trash2, Users, X } from "lucide-react";
 import { HOME } from "@/components/Sidebar";
 import { ErrorNote, PageHeader, copy, toast } from "@/components/ui";
 import { FORMATS } from "@/lib/debate";
 import { api } from "@/lib/api";
+import { join } from "@/lib/backend";
+import { canEmail, sendInvite } from "@/lib/mail";
 import { useWorkspace, type Workspace } from "@/lib/workspace";
 
 type Kind = Workspace["kind"];
@@ -29,22 +31,13 @@ export default function WorkspacesPage() {
 }
 
 function Workspaces() {
-  const { ws, guest, list, refresh, switchTo } = useWorkspace();
+  const { ws, list, refresh, switchTo, leave } = useWorkspace();
   const router = useRouter();
   const params = useSearchParams();
   const [creating, setCreating] = useState<Kind | null>(params.get("new") === "1" ? (params.get("kind") === "debate" ? "debate" : ws?.kind ?? "mun") : null);
-  const [editing, setEditing] = useState<number | null>(null);
-  const [share, setShare] = useState<{ share: boolean; share_url: string } | null>(null);
+  const [editing, setEditing] = useState<string | null>(null);
   const [err, setErr] = useState("");
-
-  useEffect(() => { api<{ share: boolean; share_url: string }>("/api/health").then(setShare).catch(() => {}); }, []);
-
-  if (guest) return (
-    <>
-      <PageHeader title="Workspaces" />
-      <p className="text-muted">You&apos;re a guest in <b className="text-fg">{ws?.name}</b>. Only its owner can manage workspaces.</p>
-    </>
-  );
+  const [code, setCode] = useState("");
 
   const run = async (fn: () => Promise<unknown>) => { setErr(""); try { await fn(); await refresh(); } catch (e) { setErr(String((e as Error).message)); } };
 
@@ -54,6 +47,13 @@ function Workspaces() {
         <button onClick={() => setCreating(ws?.kind ?? "mun")} className="btn-primary"><Plus className="size-4" /> New workspace</button>
       </PageHeader>
       <ErrorNote msg={err} />
+      <form onSubmit={(e) => { e.preventDefault(); const c = code.toUpperCase().replace(/[^A-Z0-9]/g, ""); if (c.length === 10) run(async () => { const id = await join(`${c.slice(0, 5)}-${c.slice(5)}`); setCode(""); switchTo(id); toast("Joined the workspace"); }); }}
+        className="card rise mb-4 flex flex-wrap items-center gap-2 p-3">
+        <KeyRound className="size-4 text-muted" />
+        <span className="text-sm font-medium">Have an access code?</span>
+        <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="ABCDE-FGH23" maxLength={11} aria-label="Access code" className="input w-40 font-mono uppercase tracking-widest" />
+        <button className="btn-outline" disabled={code.replace(/[^A-Za-z0-9]/g, "").length !== 10}>Join</button>
+      </form>
 
       {creating && (
         <WorkspaceForm
@@ -90,17 +90,19 @@ function Workspaces() {
               ? `${w.counts.rounds} rounds · ${w.counts.documents} documents · ${w.counts.drafts} cases`
               : `${w.counts.tasks} tasks · ${w.counts.documents} documents · ${w.counts.drafts} drafts`}</p>
 
-            <SharePanel w={w} share={share} onChange={(body) => run(() => api(`/api/workspaces/${w.id}/share`, "POST", body))} />
+            {w.guest ? <p className="mt-4 flex items-center gap-1.5 text-xs text-muted"><Users className="size-3.5" /> Shared with you by its owner</p>
+              : <SharePanel w={w} onChange={(body) => run(() => api(`/api/workspaces/${w.id}/share`, "POST", body))} />}
 
             <div className="mt-4 flex flex-wrap gap-2 border-t border-line pt-4">
               {w.id !== ws?.id && <button onClick={() => { switchTo(w.id); router.push(HOME[w.kind]); }} className="btn-primary">Open <ArrowRight className="size-4" /></button>}
+              {w.guest ? (w.id === ws?.id && <button onClick={leave} className="btn-ghost ml-auto text-danger"><LogOut className="size-4" /> Leave</button>) : <>
               <button onClick={() => setEditing(w.id)} className="btn-outline"><Pencil className="size-3.5" /> Edit</button>
-              <button disabled={list.length < 2} title={list.length < 2 ? "You need at least one workspace" : undefined}
+              <button disabled={list.filter((x) => !x.guest).length < 2} title={list.length < 2 ? "You need at least one workspace" : undefined}
                 onClick={() => confirm(`Delete "${w.name}" and all its tasks, documents and drafts? This cannot be undone.`) && run(async () => {
                   await api(`/api/workspaces/${w.id}`, "DELETE");
                   const rest = list.filter((x) => x.id !== w.id);
                   if (w.id === ws?.id) switchTo((rest.find((x) => x.kind === w.kind) ?? rest[0]).id);
-                })} className="btn-ghost ml-auto text-danger"><Trash2 className="size-4" /></button>
+                })} className="btn-ghost ml-auto text-danger"><Trash2 className="size-4" /></button></>}
             </div>
           </article>
         ))}
@@ -141,9 +143,18 @@ function WorkspaceForm({ title, initial, submit, onSave, onCancel, onKind }: { t
   );
 }
 
-function SharePanel({ w, share, onChange }: { w: Workspace; share: { share: boolean; share_url: string } | null; onChange: (b: object) => void }) {
+function SharePanel({ w, onChange }: { w: Workspace; onChange: (b: object) => void }) {
   const on = !!w.share_on;
-  const invite = `Join my Envoy workspace "${w.name}": open ${share?.share_url || "the Envoy link I send you"} and enter the code ${w.share_code}`;
+  const [to, setTo] = useState("");
+  const [sending, setSending] = useState(false);
+  const link = typeof location === "undefined" ? "" : `${location.origin}/?join=${w.share_code}`;
+  const invite = `Join my Envoy workspace "${w.name}": ${link} (or open ${location.origin} and enter the code ${w.share_code})`;
+  const send = async () => {
+    setSending(true);
+    try { await sendInvite(to.trim(), w.name, String(w.share_code), link); toast(`Invite sent to ${to}`); setTo(""); }
+    catch (e) { toast(String((e as Error).message).slice(0, 90)); }
+    setSending(false);
+  };
   return (
     <div className="mt-4 rounded-xl border border-line p-3">
       <div className="flex items-center gap-2">
@@ -155,19 +166,20 @@ function SharePanel({ w, share, onChange }: { w: Workspace; share: { share: bool
         </button>
       </div>
       {on && w.share_code && (
-        <div className="mt-3 flex flex-col gap-2">
+        <div className="rise mt-3 flex flex-col gap-2">
           <div className="flex items-center gap-2">
             <code className="flex-1 rounded-lg bg-subtle px-3 py-2 text-center font-mono text-lg tracking-[.2em]">{w.share_code}</code>
-            <button onClick={() => copy(w.share_code!, "Code copied")} className="btn-outline" aria-label="Copy code"><Copy className="size-4" /></button>
+            <button onClick={() => copy(link, "Invite link copied")} className="btn-outline" aria-label="Copy invite link" title="Copy invite link"><Link2 className="size-4" /></button>
             <button onClick={() => confirm("Generate a new code? The old one stops working immediately.") && onChange({ on: true, regenerate: true })} className="btn-ghost" aria-label="New code" title="New code"><RefreshCw className="size-4" /></button>
           </div>
+          {canEmail && (
+            <form onSubmit={(e) => { e.preventDefault(); if (to.includes("@")) send(); }} className="flex gap-2">
+              <input type="email" value={to} onChange={(e) => setTo(e.target.value)} placeholder="teammate@school.org" aria-label="Teammate email" className="input flex-1 text-sm" />
+              <button disabled={sending || !to.includes("@")} className="btn-outline">{sending ? <Loader2 className="size-4 animate-spin" /> : <Mail className="size-4" />} Email invite</button>
+            </form>
+          )}
           <button onClick={() => copy(invite, "Invite copied")} className="btn-ghost justify-start text-xs"><Copy className="size-3.5" /> Copy invite message</button>
-          <p className="flex items-start gap-1.5 text-xs text-muted">
-            <Wifi className="mt-0.5 size-3.5 shrink-0" />
-            {share?.share
-              ? <span>Teammates on your network open <b className="text-fg">{share.share_url}</b> and enter this code. They only see this workspace.</span>
-              : <span>To let teammates connect, restart Envoy with <code className="rounded bg-subtle px-1">npm run share</code> (same Wi-Fi). They only see this workspace.</span>}
-          </p>
+          <p className="text-xs text-muted">Teammates sign in with Google and open the link (or enter the code on their Workspaces page). They only see this workspace; turn sharing off or make a new code to cut access for new joiners.</p>
         </div>
       )}
     </div>

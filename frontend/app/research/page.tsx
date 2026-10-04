@@ -10,7 +10,7 @@ const SUGGEST = ["Summarize my country's official position on this topic", "What
 
 export default function Research() {
   const [docs, setDocs] = useState<Doc[]>([]);
-  const [scope, setScope] = useState<number[]>([]);
+  const [scope, setScope] = useState<string[]>([]);
   const [uploading, setUploading] = useState<string[]>([]);
   const [uploadErr, setUploadErr] = useState("");
   const [dragging, setDragging] = useState(false);

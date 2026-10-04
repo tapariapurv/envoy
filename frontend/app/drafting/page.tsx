@@ -3,7 +3,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, Copy, FileDown, FileText, Hammer, Languages, ListChecks, Plus, Quote, Scale, Sparkles, Square, Trash2, Wand2, X } from "lucide-react";
 import Paper from "@/components/Paper";
 import { ErrorNote, Markdown, PageHeader, Thinking, copy, toast } from "@/components/ui";
-import { api, apiFetch, fmtTime, friendly, useAI, words, type AITask, type Draft } from "@/lib/api";
+import { buildDocx, saveBlob } from "@/lib/exporters";
+import { api, fmtTime, friendly, useAI, words, type AITask, type Draft } from "@/lib/api";
 import { EVIDENCE_FORMATS } from "@/lib/debate";
 import { useSettings } from "@/lib/settings";
 import { useWorkspace } from "@/lib/workspace";
@@ -53,7 +54,7 @@ export default function Drafting() {
   useEffect(() => {
     const flush = () => {
       const d = unsaved.current;
-      if (d) apiFetch(`/api/drafts/${d.id}`, { method: "PUT", keepalive: true, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: d.title, content: d.content }) });
+      if (d) api(`/api/drafts/${d.id}`, "PUT", { title: d.title, content: d.content }).catch(() => {}); // queued offline by Firestore if the tab closes first
     };
     addEventListener("pagehide", flush);
     return () => removeEventListener("pagehide", flush);
@@ -73,7 +74,7 @@ export default function Drafting() {
     saveTimer.current = setTimeout(() => persist(d), 700);
   };
 
-  const switchTo = (id: number) => {
+  const switchTo = (id: string) => {
     if (cur && !saved) { clearTimeout(saveTimer.current); persist(cur); }
     setCur(drafts.find((d) => d.id === id) ?? null);
     ai.clear(); setTab("preview");
@@ -118,26 +119,19 @@ export default function Drafting() {
         // AI tidies structure first; the result also lands in the AI tab so it can be applied to the draft.
         setTarget(null); setTab("ai"); setLastTask("polish");
         const r = await ai.run("polish", { text: markdown });
-        if (!r.text.trim()) return;
-        markdown = r.text;
+        if (r.text.trim()) markdown = r.text; // AI unavailable: export the draft as written
       } else setTab("preview");
       const name = cur.title.replace(/[^\w\- ]+/g, "").trim() || (debate ? "Case" : "Position Paper");
-      let res: Response;
       if (kind === "pdf") {
         await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); // let the paper render
         const el = document.querySelector<HTMLElement>("[data-paper]");
         if (!el) throw new Error("Open the preview first");
         const html = paperHtml(el);
-        res = await apiFetch("/api/export/pdf", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ html, title: cur.title }) });
-        if (res.status === 501) { printFallback(html); return; } // no Chrome on this machine: use the print dialog
-      } else {
-        res = await apiFetch("/api/export/docx", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ markdown, title: cur.title, style: kind }) });
+        printFallback(html); // the browser's print dialog → "Save as PDF" prints the exact preview
+        return;
       }
-      if (!res.ok) throw new Error(await res.text());
-      const url = URL.createObjectURL(await res.blob());
-      Object.assign(document.createElement("a"), { href: url, download: `${name}.${kind === "pdf" ? "pdf" : "docx"}` }).click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-      toast(kind === "pdf" ? "PDF exported" : "Word document exported");
+      saveBlob(await buildDocx(markdown, s, kind, cur.title), `${name}.docx`);
+      toast("Word document exported");
     } catch (e) {
       toast(friendly(String((e as Error).message)).slice(0, 90));
     } finally {
@@ -156,7 +150,7 @@ export default function Drafting() {
       <PageHeader title={debate ? "Case Builder" : "Drafting Studio"} sub={debate
         ? "Build arguments as claim → warrant → impact, weigh them, and cut evidence. AI acts on your selection, or the whole case."
         : "Split-screen Markdown with AI tools that act on your selection — or the whole draft if nothing is selected."}>
-        <select value={cur?.id ?? ""} onChange={(e) => switchTo(Number(e.target.value))} className="input w-56" aria-label="Choose draft">
+        <select value={cur?.id ?? ""} onChange={(e) => switchTo(e.target.value)} className="input w-56" aria-label="Choose draft">
           {drafts.map((d) => <option key={d.id} value={d.id}>{d.title}</option>)}
         </select>
         <button onClick={create} className="btn-outline"><Plus className="size-4" /> New</button>
