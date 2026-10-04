@@ -2,7 +2,10 @@
  * Web Research, server half: search -> read trusted pages -> rank passages. Streams NDJSON
  * ({step, detail} … then {sources}). The browser plans the queries and writes the report with the user's model.
  */
+import { lookup } from "node:dns/promises";
+import { isIP } from "node:net";
 import { parse } from "node-html-parser";
+import { signedIn } from "@/lib/verify";
 import TRUSTED from "@/lib/trusted.json";
 
 export const maxDuration = 60;
@@ -42,7 +45,12 @@ function trusted(url: string, allow: Set<string>, block: Set<string>) {
 
 // ---------- search ----------
 async function ddg(q: string): Promise<Hit[]> {
-  const r = await fetch("https://html.duckduckgo.com/html/", { method: "POST", headers: { "User-Agent": UA, "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ q, kl: "wt-wt" }) });
+  let r: Response | null = null;
+  for (let i = 0; i < 3 && r?.status !== 200; i++) { // DDG answers 202 when it throttles; back off and retry
+    if (i) await new Promise((ok) => setTimeout(ok, 1500 * i));
+    r = await fetch("https://html.duckduckgo.com/html/", { method: "POST", headers: { "User-Agent": UA, "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ q, kl: "wt-wt" }) });
+  }
+  if (!r) throw new Error("DuckDuckGo didn't answer");
   if (r.status !== 200) throw new Error(`DuckDuckGo returned ${r.status} (rate limited?). Try again shortly or add a Brave or Serper key in Settings.`);
   return parse(await r.text()).querySelectorAll("div.result").filter((d) => !d.classList.contains("result--ad")).flatMap((d) => {
     const a = d.querySelector("a.result__a"), href = a?.getAttribute("href") ?? "";
@@ -69,12 +77,27 @@ async function serper(q: string, key: string): Promise<Hit[]> {
 }
 
 // ---------- read ----------
+const PRIVATE = /^(10\.|127\.|0\.|169\.254\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.|::1$|f[cd]|fe80|::ffff:(10|127|169\.254|192\.168)\.)/i;
+async function publicHost(url: string) {
+  const u = new URL(url);
+  if (u.port || !/^https?:$/.test(u.protocol)) return false;
+  const addrs = await lookup(u.hostname, { all: true }).catch(() => []);
+  return addrs.length > 0 && addrs.every((a) => isIP(a.address) && !PRIVATE.test(a.address));
+}
 async function fetchPage(url: string, allow: Set<string>, block: Set<string>) {
   try {
-    const r = await fetch(url, { headers: { "User-Agent": UA, "Accept-Language": "en;q=0.9" }, signal: AbortSignal.timeout(12_000) });
-    const ctype = r.headers.get("content-type")?.toLowerCase() ?? "";
+    // Follow redirects by hand so every hop is re-checked: trusted domain, default port, public IP.
+    let r: Response | null = null, at = url;
+    for (let hop = 0; hop < 4; hop++) {
+      if (!trusted(at, allow, block) || !(await publicHost(at))) return null;
+      r = await fetch(at, { redirect: "manual", headers: { "User-Agent": UA, "Accept-Language": "en;q=0.9" }, signal: AbortSignal.timeout(12_000) });
+      const next = r.status >= 300 && r.status < 400 && r.headers.get("location");
+      if (!next) break;
+      at = new URL(next, at).toString();
+    }
+    const ctype = r?.headers.get("content-type")?.toLowerCase() ?? "";
     // ponytail: PDFs fall back to the search snippet; add a PDF parser if briefs need report text
-    if (r.status !== 200 || !/html|xml/.test(ctype) || !trusted(r.url, allow, block)) return null; // a redirect must stay trusted
+    if (!r || r.status !== 200 || !/html|xml/.test(ctype)) return null;
     const html = (await r.text()).slice(0, MAX_BYTES);
     const root = parse(html);
     const title = root.querySelector('meta[property="og:title"]')?.getAttribute("content") || root.querySelector("title")?.text.trim() || "";
@@ -110,7 +133,9 @@ function angles(b: Body): [string, string][] {
 }
 
 export async function POST(req: Request) {
-  const b: Body = await req.json();
+  if (!(await signedIn(req))) return new Response("Please sign in", { status: 401 });
+  const b: Body | null = await req.json().catch(() => null);
+  if (!b?.text || !Array.isArray(b.queries)) return new Response("Bad request", { status: 400 });
   const enc = new TextEncoder();
   return new Response(new ReadableStream({
     async start(ctl) {
@@ -126,8 +151,8 @@ export async function POST(req: Request) {
         const runs = (b.queries ?? []).slice(0, 12).flatMap((q, i) => [q, groups.length ? `${q} (${site(groups[i % groups.length])})` : q]);
         send({ step: "search", detail: `Running ${runs.length} searches` });
         const engine = (q: string) => b.provider === "serper" ? serper(q, b.serper_key!) : b.provider === "brave" && b.brave_key ? brave(q, b.brave_key) : ddg(q);
-        // Brave's free tier allows 1 request/second; others run 3 at a time.
-        const width = b.provider === "brave" ? 1 : 3, results: (Hit[] | Error)[] = [];
+        // Brave's free tier allows 1 request/second and DuckDuckGo throttles bursts; Serper runs 3 at a time.
+        const width = b.provider === "serper" ? 3 : 1, results: (Hit[] | Error)[] = [];
         for (let i = 0; i < runs.length; i += width) results.push(...await Promise.all(runs.slice(i, i + width).map((q) => engine(q).catch((e: Error) => e))));
         const errors = results.filter((r): r is Error => r instanceof Error);
         if (errors.length === results.length) throw errors[0];

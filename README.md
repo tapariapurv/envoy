@@ -1,18 +1,20 @@
 <p align="center"><img src="docs/brand/envoy-logo.png" width="112" alt="Envoy logo"></p>
 
-# Envoy — a private, local AI workspace for Model UN
+# Envoy — a free AI workspace for Model UN and debate
 
-Envoy is a desktop-grade workspace for Model UN delegates: task board and committee timers, a private research vault you can chat with (with citations), an AI drafting studio, an opponent simulator, procedural flashcards, a paced teleprompter, and a one-file offline binder.
+Envoy is a web app for Model UN delegates and debaters. It has a task board and committee timers, a research vault you can chat with (answers cite their sources), cited web research briefs, an AI drafting studio with Word export, an opponent simulator, debate prep (flow, sparring, timers), procedure flashcards, a paced teleprompter, and a one-file offline binder.
 
-By default **everything runs on your Mac**: documents are parsed, embedded and searched locally, and the AI runs through [Ollama](https://ollama.com). Cloud models (OpenAI, Anthropic, Gemini…) are optional and opt-in from Settings.
+Sign in with Google and you're ready. Each conference or tournament gets its own workspace, which you can share with your team using an access code or an emailed invite link. AI runs on **your own API key** (Google Gemini and Groq have free tiers). Envoy can also use a model **running on your own computer** through [Ollama](https://ollama.com): the browser calls `localhost:11434` directly, so this works even on the hosted site.
 
-| Layer | Tech |
-|---|---|
-| Frontend | Next.js 16 (App Router) · React 19 · Tailwind CSS 4 |
-| Backend | Python · FastAPI · SQLite (stdlib `sqlite3`) |
-| AI routing | LiteLLM → Ollama at `localhost:11434` (default) or any cloud provider |
-| RAG | Microsoft MarkItDown (parsing) · ChromaDB (local vectors) · `nomic-embed-text` embeddings |
-| Export | python-docx (Word position papers) · reportlab (PDF guide) · self-contained HTML binder |
+| Layer | Tech | Cost |
+|---|---|---|
+| Frontend | Next.js 16 (App Router) · React 19 · Tailwind CSS 4, on **Vercel** | Free (Hobby) |
+| Auth & data | **Firebase** Authentication (Google) · Cloud Firestore with offline cache | Free (Spark) |
+| Sharing | Firestore membership + access codes, enforced by `firestore.rules` | Free |
+| Invite emails | **Google Apps Script** web app (`apps-script/Code.gs`) sending from your Gmail | Free (~100/day) |
+| AI | Your key → Gemini / Groq / OpenRouter / OpenAI / Anthropic via a Vercel relay, or Ollama / LM Studio straight from the browser | Free tiers available |
+| Research | In-browser parsing (pdf.js, mammoth) and BM25 retrieval · web search (DuckDuckGo, Brave or Serper) in a Vercel function | Free |
+| Export | `docx` (Word, styled like the preview) · browser print → PDF · self-contained HTML binder | — |
 
 ## A look inside
 
@@ -37,168 +39,89 @@ By default **everything runs on your Mac**: documents are parsed, embedded and s
 
 ---
 
-## Quick start
+## Quick start (local development)
 
 ```bash
-npm run dev
+git clone https://github.com/tapariapurv/envoy.git && cd envoy
+cp frontend/.env.local.example frontend/.env.local   # fill in your Firebase web config
+npm run dev                                          # http://localhost:3000
 ```
 
-That's it. Run it from the project root. The first run:
+`npm test` runs the type check and the retrieval self-checks. `npm run build` makes a production build.
 
-1. creates a Python virtualenv in `backend/.venv` and installs the backend dependencies (a few minutes),
-2. installs the frontend dependencies into `frontend/node_modules`,
-3. starts Ollama if it's installed but not running, and pulls the `nomic-embed-text` embedding model if it's missing,
-4. starts the API on **http://127.0.0.1:8000** and the app on **http://localhost:3000**, then opens your browser.
+## Deploy your own (all free)
 
-Later runs skip straight to step 4. `Ctrl+C` stops everything. Set `ENVOY_NO_OPEN=1` to skip opening the browser, or `ENVOY_NO_PULL=1` to skip the automatic embedding-model download.
+1. **Firebase.** Go to [console.firebase.google.com](https://console.firebase.google.com) and create a project (you can turn off Analytics). Then:
+   - Under **Authentication → Sign-in method**, enable **Google**.
+   - Under **Firestore → Create database**, pick Standard edition in production mode.
+   - Under **Firestore → Rules**, paste [`firestore.rules`](firestore.rules) and publish.
+   - Under **Project settings → Your apps**, add a Web app and copy its config into `frontend/.env.local`.
+2. **Vercel.** Import the GitHub repo at [vercel.com/new](https://vercel.com/new) and set **Root Directory** to `frontend`. Add the four `NEXT_PUBLIC_FIREBASE_*` variables, then deploy.
+3. **Authorize the domain.** In Firebase, go to **Authentication → Settings → Authorized domains** and add your `*.vercel.app` domain. Google sign-in won't work there until you do.
+4. **Optional: invite emails.** At [script.google.com](https://script.google.com), create a new project and paste [`apps-script/Code.gs`](apps-script/Code.gs).
+   - Set the script properties `FIREBASE_API_KEY`, `FIREBASE_PROJECT` and `APP_ORIGIN` (your site URL).
+   - Deploy it as a **Web app**, executing as *Me*, with access for *Anyone*.
+   - Put the `/exec` URL in `NEXT_PUBLIC_MAIL_URL` on Vercel and redeploy.
 
----
+Free tier headroom: Firestore allows 50k reads and 20k writes per day plus 1 GiB of storage. Vercel Hobby includes 100 GB of bandwidth.
 
-## Installation from scratch (macOS, Apple Silicon)
+## AI engine
 
-### 1. Homebrew
+Pick a provider in **Settings → AI Engine** and paste your key. It is saved privately to your account and teammates never see it.
 
-```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-```
-
-### 2. Node.js (≥ 20.11) and Python (3.12 recommended)
-
-```bash
-brew install node python@3.12
-```
-
-> **Why Python 3.12?** ChromaDB depends on `onnxruntime`, whose wheels often lag the newest Python release. The launcher automatically prefers `python3.12`, then `3.13`, `3.11`, and finally `python3`. If `pip install` fails on a very new Python, install 3.12 and delete `backend/.venv`.
-
-### 3. Ollama (local AI)
-
-```bash
-brew install ollama          # or download the app from https://ollama.com/download
-ollama serve                 # leave running (the macOS app does this automatically)
-```
-
-Pull a chat model and the embedding model:
-
-```bash
-ollama pull llama3.2         # 3B, fast on any Apple Silicon Mac (~2 GB)
-ollama pull nomic-embed-text # embeddings for the Research Hub (~270 MB)
-```
-
-Model suggestions by RAM:
-
-| Mac RAM | Chat model | Notes |
+| Provider | Free? | Example model |
 |---|---|---|
-| 8 GB | `llama3.2` (3B), `qwen2.5:3b`, `gemma3:4b` | Snappy, good for drafting and short answers |
-| 16 GB | `qwen2.5:7b`, `llama3.1:8b`, `gemma3:12b` | Noticeably better reasoning and citations |
-| 32 GB+ | `qwen2.5:14b`, `gemma3:27b`, `mistral-small` | Best quality for position papers |
+| Google Gemini | Free tier ([key](https://aistudio.google.com/apikey)) | `gemini/gemini-2.5-flash` |
+| Groq | Free tier ([key](https://console.groq.com/keys)) | `groq/llama-3.3-70b-versatile` |
+| OpenRouter | Free models | `openrouter/meta-llama/llama-3.3-70b-instruct:free` |
+| OpenAI / Anthropic | Paid | `openai/gpt-4.1-mini`, `anthropic/claude-sonnet-5` |
+| **Ollama on your computer** | Free, private | `ollama/llama3.2` |
 
-On first launch Envoy picks an installed chat model automatically if you haven't chosen one. Change it any time in **Settings → AI Engine** (installed models show up as one-click chips).
-
-### 4. Run
-
-```bash
-cd Envoy
-npm run dev
-```
-
----
-
-## Manual setup (optional)
-
-If you prefer running each piece yourself:
+**Using a local model from the hosted site.** Install Ollama and run `ollama pull llama3.2`. Then quit the Ollama app and start it with your site allowed:
 
 ```bash
-# Backend
-cd backend
-python3.12 -m venv .venv
-.venv/bin/pip install -r requirements.txt
-.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
-
-# Frontend (second terminal)
-cd frontend
-npm install
-npm run dev
+OLLAMA_ORIGINS="https://your-envoy.vercel.app" ollama serve
 ```
 
-The frontend talks to `http://127.0.0.1:8000` by default. To change it, copy `frontend/.env.local.example` to `frontend/.env.local` and edit `NEXT_PUBLIC_API`. If you move the frontend off port 3000, add its origin to the `ENVOY_ORIGINS` env var for the backend (comma-separated).
-
----
-
-## Using cloud models (optional)
-
-Go to **Settings → AI Engine**, pick a provider, and paste an API key. Model strings follow [LiteLLM's format](https://docs.litellm.ai/docs/providers), for example:
-
-- `anthropic/claude-sonnet-5`
-- `openai/gpt-4.1-mini`
-- `gemini/gemini-2.5-flash`
-- `openai/<model>` with a custom API base for LM Studio, vLLM, or any OpenAI-compatible server
-
-The key is stored only in your local SQLite database and is never sent back to the browser in full. **Note:** with a cloud provider, the text you send (including retrieved document passages) goes to that provider. Embeddings stay on Ollama unless you change the embedding model too.
-
----
+Chrome treats `http://localhost` as secure, so the hosted page can call it, and your text never leaves your machine. LM Studio works the same way under "OpenAI-compatible".
 
 ## Project layout
 
 ```
-Envoy/
-├── package.json            # `npm run dev` → scripts/dev.mjs
-├── scripts/dev.mjs         # bootstrap + run backend and frontend together
-├── backend/
-│   ├── requirements.txt
-│   ├── app/
-│   │   ├── main.py         # FastAPI routes
-│   │   ├── db.py           # SQLite schema, seeds (clauses, RoP cards), settings
-│   │   ├── llm.py          # LiteLLM routing, prompts, streaming, embeddings
-│   │   ├── rag.py          # MarkItDown parsing, chunking, ChromaDB search
-│   │   ├── export.py       # Offline Binder HTML
-│   │   └── docx_export.py  # Position paper → styled, editable Word document
-│   └── tests/test_core.py
-├── frontend/
-│   ├── app/                # one folder per feature page + settings
-│   ├── components/         # Sidebar, Kanban, Timer, shared UI
-│   └── lib/                # API client + streaming hook, settings provider
-├── docs/
-│   ├── brand/              # logo SVG sources, transparent PNG exports, render.sh
-│   ├── USER_GUIDE.md
-│   └── build_guide_pdf.py  # USER_GUIDE.md → styled PDF (reportlab)
-└── data/                   # created at runtime: envoy.db + chroma/ (git-ignored)
+firestore.rules          who can read/write what (workspace members, personal data, access codes)
+apps-script/Code.gs      invite mailer (Google Apps Script web app)
+frontend/
+  app/                   pages (War Room, Research Hub, Drafting, Debate…)
+  app/api/llm/route.ts   relays chat completions to cloud providers with the user's key
+  app/api/web/route.ts   web research: search → read trusted pages → rank passages
+  lib/backend.ts         the app's REST paths served from Firestore in the browser
+  lib/ai.ts              prompts, retrieval, streaming, web research (plan + write)
+  lib/exporters.ts       file parsing, Word export, offline binder
+  lib/firebase.ts        Firebase init (Google sign-in, Firestore offline cache)
+  tests/core.test.mts    retrieval self-checks
 ```
 
 ## Workspaces & sharing
 
-Create one workspace per conference (sidebar → workspace switcher → **New workspace**). Each has its own tasks, research vault, drafts and delegation profile; app settings, the clause bank and flashcards are shared.
+Each workspace holds its own tasks, research documents, drafts, debate rounds and flows. The delegation profile (country, committee, topic, or for debate the format, side and motion) belongs to the workspace too. Settings, the clause bank, flashcards and the motion bank belong to you.
 
-To collaborate, open **Manage & share**, switch on **Teammate access** for a workspace and send the access code. Start Envoy with `npm run share`; teammates on the same network open the printed URL (e.g. `http://192.168.0.12:3001`) and enter the code. They can only see and edit that workspace, can't change your AI settings, and never see your API key. Turning sharing off, or generating a new code, locks them out immediately.
+To share a workspace, open **Workspaces** and turn on **Teammate access**. Then send the invite link (`/?join=CODE`), email it, or share the code for teammates to enter on their own Workspaces page. Joined members can edit the workspace's content and profile. Only the owner can rename, share or delete it. To cut access for future joiners, make a new code.
 
 ## Data & privacy
 
-- All data lives in `data/` — `envoy.db` (tasks, drafts, documents as Markdown, clauses, cards, settings) and `chroma/` (vectors). Back up or move your workspace by copying that folder.
-- With `npm run dev` the API binds to `127.0.0.1` only. `npm run share` opens it to your local network, and every request from another device needs a valid workspace access code.
-- ChromaDB and LiteLLM telemetry are disabled.
-- Fonts are self-hosted at build time; the app makes no third-party requests at runtime.
-
-## Handy commands
-
-| Command | What it does |
-|---|---|
-| `npm run dev` | Bootstrap (first run) and start everything (this Mac only) |
-| `npm run share` | Same, but reachable on your Wi-Fi so teammates can join a workspace with its access code |
-| `npm test` | Backend self-checks + frontend type-check |
-| `npm run guide:pdf` | Build `docs/Envoy_User_Guide.pdf` from the user guide |
-| `bash docs/brand/render.sh` | Re-export the logo PNGs (transparent) from the SVG sources |
+- Your data lives in your Firebase project under your Google account. It is also cached in the browser, so pages open instantly and edits made offline sync later.
+- Uploaded files are parsed **in your browser**, and only the extracted text is stored.
+- Text goes to an AI provider only when you run an AI tool, and only to the provider you chose. With Ollama, nothing leaves your computer.
 
 ## Troubleshooting
 
-| Symptom | Fix |
+| Problem | Fix |
 |---|---|
-| "Can't reach Ollama" | Open the Ollama app or run `ollama serve`. |
-| "Model not installed" | `ollama pull <model>` or pick an installed one in Settings. |
-| Upload fails with an embedding error | `ollama pull nomic-embed-text` (or set another embedding model in Settings → Research & RAG, then **Re-index**). |
-| "No extractable text" on a PDF | It's a scanned image. Run it through OCR first (macOS Preview → Export as PDF with text, or `ocrmypdf`). |
-| `pip install` fails building `onnxruntime`/`chromadb` | Use Python 3.12: `brew install python@3.12 && rm -rf backend/.venv && npm run dev`. |
-| Port already in use | `npm run dev` automatically moves to the next free port and prints the URL. |
-
-See **[docs/USER_GUIDE.md](docs/USER_GUIDE.md)** for a walkthrough of every feature.
+| Google sign-in fails on your domain | Add the domain under Firebase → Authentication → Settings → Authorized domains. |
+| "Can't reach the AI engine" with Ollama | Start Ollama with `OLLAMA_ORIGINS` set to your site (see above). |
+| "Add your API key" | Settings → AI Engine. Gemini and Groq keys are free. |
+| Web research: "DuckDuckGo returned 202" | DuckDuckGo throttles shared servers. Try again, or add a free Brave or Serper key in Settings → Web Research. |
+| Scanned PDF has no text | Run OCR first. Envoy reads the PDF's text layer. |
 
 ## License
 

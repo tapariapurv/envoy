@@ -1,11 +1,13 @@
 "use client";
 /** Browser-side file work: document text extraction, the offline binder and position paper -> Word. */
+import DOMPurify from "dompurify";
 import { marked, type Token, type Tokens } from "marked";
 import { splitMeta } from "@/components/Paper";
 
 const MAX_UPLOAD = 50 * 1024 * 1024;
 const esc = (s: unknown) => String(s ?? "").replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
-const md = (s: string) => marked.parse(s || "", { async: false }) as string;
+// Sanitized: teammates write this content, and the binder is opened as a local file.
+const md = (s: string) => DOMPurify.sanitize(marked.parse(s || "", { async: false }) as string);
 
 // ---------- upload parsing ----------
 export async function parseFile(f: File): Promise<string> {

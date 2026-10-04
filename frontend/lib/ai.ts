@@ -2,12 +2,14 @@
 /** AI tasks in the browser: prompt building, retrieval over the vault, and streaming from the chosen model. */
 import P from "./prompts.json";
 import { workspaceDocs } from "./backend";
+import { auth } from "./firebase";
 import { chunk, rank } from "./text";
 import type { Settings } from "./settings";
 
 type Msg = { role: "system" | "user" | "assistant"; content: string };
 export type Event = { sources?: unknown[]; t?: string; error?: string; step?: string; detail?: string; queries?: string[] };
 const RAG_TASKS = new Set(["chat", "rebut", "card"]);
+const authed = async () => ({ "Content-Type": "application/json", Authorization: `Bearer ${await auth.currentUser?.getIdToken()}` });
 const fill = (tpl: string, v: Record<string, string>) => tpl.replace(/\{(\w+)\}/g, (_, k) => v[k] ?? "");
 
 /** Local engines (Ollama, LM Studio…) are called straight from the browser, so localhost works even on the hosted site. */
@@ -24,7 +26,7 @@ export async function* chat(messages: Msg[], s: Settings, opts: { signal?: Abort
       headers: { "Content-Type": "application/json", ...(s.llm_api_key ? { Authorization: `Bearer ${s.llm_api_key}` } : {}) } });
   } else {
     if (!s.llm_api_key) throw new Error("Add your API key in Settings → AI Engine.");
-    res = await fetch("/api/llm", { method: "POST", signal: opts.signal, headers: { "Content-Type": "application/json" },
+    res = await fetch("/api/llm", { method: "POST", signal: opts.signal, headers: await authed(),
       body: JSON.stringify({ provider: s.llm_provider, key: s.llm_api_key, body }) });
   }
   if (!res.ok || !res.body) throw new Error(`${res.status} ${(await res.text()).slice(0, 400)}`);
@@ -126,7 +128,7 @@ export async function* webResearch(text: string, mode: "debate" | "mun", depth: 
   const queries = [...planned, ...fallbackQueries(text, mode, s)].filter((q) => !seen.has(q.toLowerCase()) && seen.add(q.toLowerCase())).slice(0, n);
   yield { queries };
 
-  const res = await fetch("/api/web", { method: "POST", signal, headers: { "Content-Type": "application/json" }, body: JSON.stringify({
+  const res = await fetch("/api/web", { method: "POST", signal, headers: await authed(), body: JSON.stringify({
     text, mode, depth, queries, country: s.delegate_country, provider: s.web_search_provider, brave_key: s.web_search_key, serper_key: s.serper_key,
     use_default: s.trusted_use_default, custom: s.trusted_custom }) });
   if (!res.ok || !res.body) throw new Error(await res.text());

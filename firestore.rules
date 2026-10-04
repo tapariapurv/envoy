@@ -17,8 +17,8 @@ service cloud.firestore {
       allow create: if signedIn() && request.resource.data.owner == me() && request.resource.data.members == [me()];
       allow delete: if signedIn() && resource.data.owner == me();
       allow update: if signedIn() && (
-        // owner: anything but ownership
-        (resource.data.owner == me() && request.resource.data.owner == me())
+        // owner: anything but ownership, and stays a member
+        (resource.data.owner == me() && request.resource.data.owner == me() && me() in request.resource.data.members)
         // members: profile fields only, or leave (remove only themselves)
         || (me() in resource.data.members && changes().hasOnly(['delegate_country', 'committee', 'topic', 'format', 'side', 'team']))
         || (me() in resource.data.members && changes().hasOnly(['members'])
@@ -38,7 +38,8 @@ service cloud.firestore {
     // Access codes: readable only by exact code (no listing), written by the workspace owner.
     match /codes/{code} {
       allow get: if signedIn();
-      allow create, update: if signedIn() && ws(request.resource.data.ws).owner == me();
+      allow create: if signedIn() && ws(request.resource.data.ws).owner == me() && request.resource.data.keys().hasOnly(['ws', 'owner']);
+      allow update: if false;
       allow delete: if signedIn() && ws(resource.data.ws).owner == me();
     }
   }

@@ -1,18 +1,19 @@
 # Envoy User Guide
 
-Envoy is your private Model UN workspace. This guide walks through every feature in the order you'd typically use them while preparing for, and competing at, a conference.
+Envoy is a free web app for Model UN delegates and debaters. This guide walks through every feature in the order you'd typically use them while preparing for, and competing at, a conference.
 
 ## Getting Started
 
-1. From the project folder, run `npm run dev`. Envoy opens at **http://localhost:3000**.
-2. Open **Settings** (bottom of the sidebar) and fill in **Delegation**: your country, committee and topic. Every AI tool uses these, so its answers are written from your delegation's point of view.
-3. Check the status light at the bottom of the sidebar. **Green** means the AI engine is reachable. The label shows the active model and whether it's **Local** or **Cloud**.
+1. Open your Envoy site and click **Continue with Google**. Your first workspace is created for you, and your data syncs to every device you sign in on.
+2. Open **Settings → AI Engine**, choose a provider and paste your API key. **Google Gemini** and **Groq** have free keys, and the hint under the field links to where you get one. To use a model on your own computer instead, see [Local vs. cloud](#local-vs-cloud).
+3. Still in **Settings** (bottom of the sidebar) and fill in **Delegation**: your country, committee and topic. Every AI tool uses these, so its answers are written from your delegation's point of view.
+4. Check the status light at the bottom of the sidebar. **Green** means the AI engine is ready. The label shows the active model and whether it's **Local** or **Cloud**.
 
 > **Tip:** Every change in Settings saves automatically. Look for "All changes saved" at the top of the page.
 
 ![Envoy in dark mode](screenshots/drafting-dark.png)
 
-**Light, Dark or System?** Use the switcher at the bottom of the sidebar (on a phone, it's the sun/moon button in the top bar). **System** follows your Mac's appearance automatically. Settings → Appearance offers two more themes, Midnight and Sepia, plus seven accent colours.
+**Light, Dark or System?** Use the switcher at the bottom of the sidebar (on a phone, it's the sun/moon button in the top bar). **System** follows your device's appearance automatically. Settings → Appearance offers two more themes, Midnight and Sepia, plus seven accent colours.
 
 ## Workspaces
 
@@ -22,20 +23,21 @@ Create a workspace for each conference you attend, like *HMUN 2027* or *NHSMUN 2
 
 - **Switch:** click the workspace name at the top of the sidebar and pick another.
 - **Create:** choose **New workspace** in that menu, then fill in the name, conference, dates, country, committee and topic.
-- **Manage:** **Manage & share** shows every workspace with its counts. From there you can open, edit or delete one.
+- **Manage:** **Manage, share & join** shows every workspace you own or have joined, with its counts. From there you can open, edit or delete one.
+- **Sign out:** the same menu has **Sign out** at the bottom.
 
-App settings (theme, AI engine, timers), the clause bank and the flashcards are shared by all workspaces.
+App settings (theme, AI engine, timers), the clause bank, the flashcards and the motion bank belong to your account and are the same in every workspace.
 
 ### Sharing a workspace with teammates
 
-1. In **Manage & share**, turn on **Teammate access** for a workspace. You'll get a code such as `DHKT4-BD3VW`.
-2. Quit Envoy and start it with `npm run share`. The terminal prints a network address, for example `http://192.168.0.12:3001`.
-3. Send your teammate the address and the code. **Copy invite message** does both at once.
-4. Your teammate opens the address on the same Wi-Fi and enters the code.
+1. On the **Workspaces** page, turn on **Teammate access** for a workspace. You'll get a code such as `DHKT4-BD3VW`.
+2. Invite teammates in any of these ways:
+   - **Copy the invite link** (🔗).
+   - Type their address and choose **Email invite**.
+   - Share the code, which they enter under **Have an access code?** on their own Workspaces page.
+3. Teammates sign in with Google, and the workspace appears in their switcher, marked "Shared with you". It works from anywhere, not just your Wi-Fi.
 
-![The join screen teammates see](screenshots/join.png)
-
-Guests can use everything inside that one workspace, including the AI tools, which run on your Mac. They can't see your other workspaces, change your app settings, or see your API key. Turn the switch off, or press ↻ for a new code, to revoke access immediately.
+Members can use everything inside that workspace and edit its content and delegation profile. They can't see your other workspaces, your settings or your API keys, and AI tools run on **their own** key. Only you, the owner, can rename, share or delete the workspace. Press ↻ for a new code to stop new people joining with the old one. A member can leave from the workspace menu.
 
 ## War Room Dashboard
 
@@ -75,12 +77,12 @@ A private document vault you can chat with. Answers come with citations.
 
 ### Adding documents
 
-Drag files onto the drop zone, or click it to browse. Supported formats: **PDF, DOCX, PPTX, XLSX, HTML, TXT, Markdown, CSV and JSON**, up to 50 MB each.
+Drag files onto the drop zone, or click it to browse. Supported formats: **PDF, DOCX, HTML, TXT, Markdown, CSV and JSON**, up to 50 MB each. Everyone in the workspace sees the vault.
 
 Each file is:
-1. converted to Markdown with Microsoft MarkItDown,
-2. split into overlapping chunks (you can change the size in Settings),
-3. embedded locally and stored in ChromaDB, with the full text kept in SQLite.
+1. read **in your browser** (the file itself is never uploaded),
+2. saved as text to the workspace (very long files are split into parts),
+3. split into overlapping chunks when you ask a question, then ranked by keyword relevance (BM25). The chunk size is in Settings.
 
 > **Scanned PDFs** contain images instead of text, so Envoy will report "No extractable text". Run OCR on them first.
 
@@ -142,11 +144,11 @@ Click **Export** (top right) and choose a format:
 
 | Format | Result |
 |---|---|
-| **PDF** | Identical to the preview. It's printed from the same page by Chrome, Edge or Brave on your Mac. If none is installed, your browser's print dialog opens so you can choose **Save as PDF**. |
+| **PDF** | Identical to the preview. Your browser's print dialog opens with the paper; choose **Save as PDF**. |
 | **Word document** | An editable `.docx` styled like the preview: the letterhead, numbered section badges, shaded key-message quote, numbered proposal cards and highlighted key terms. |
 | **Word · conference format** | Times New Roman 12, justified and plain, for conferences that require it. |
 
-**AI-polish layout first** is on by default. The AI tidies the structure before exporting, and the polished version also appears in the AI tab so you can keep it in your draft. Turn it off to export the draft exactly as written.
+**AI-polish layout first** is on by default. The AI tidies the structure before exporting (if no AI engine is set up, the draft is exported as written), and the polished version also appears in the AI tab so you can keep it in your draft. Turn it off to export the draft exactly as written.
 
 The `.docx` is fully editable. It uses real Word styles (Title, Heading 1, Quote, numbered lists), so the navigation pane, restyling and track changes all work. It also has a running header with your country and committee, and live page numbers.
 
@@ -205,7 +207,7 @@ Markdown symbols and citation markers are removed automatically, so you only see
 
 **Export binder** downloads a single `.html` file containing all of your tasks, drafts, every research document, the clause bank, and the procedure cards. It:
 
-- works with **no internet and no Envoy running**, so you can open it on any laptop, tablet or phone,
+- works with **no internet and without Envoy**, so you can open it on any laptop, tablet or phone,
 - has a **search box** that filters the whole binder as you type,
 - follows your device's light or dark mode, and prints cleanly.
 
@@ -213,7 +215,7 @@ Export a fresh binder the night before the conference.
 
 ## Settings
 
-Everything is saved automatically to your local database.
+Everything saves automatically to your account. Delegation fields belong to the current workspace.
 
 ![Settings: delegation profile, themes and accent colours](screenshots/settings.png)
 
@@ -223,8 +225,9 @@ Everything is saved automatically to your local database.
 | **Appearance** | Theme (System, Light, Dark, Midnight, Sepia), accent colour (7 options), text size. The sidebar switcher changes System/Light/Dark from any page. |
 | **Timers** | Default speaking time, moderated caucus total and per-speaker time, unmoderated caucus, warning threshold, chime on/off. |
 | **Teleprompter** | Default words per minute, font size, mirror by default. |
-| **AI Engine** | Provider (Ollama, OpenAI, Anthropic, Gemini, OpenAI-compatible), model, API base URL, API key, creativity (temperature), max response length, and **Test connection**. Installed Ollama models appear as one-click chips. |
-| **Research & RAG** | Embedding model, chunk size, chunk overlap, passages per answer, and **Re-index all documents**. |
+| **AI Engine** | Provider (Gemini, Groq, OpenRouter, OpenAI, Anthropic, Ollama on this computer, OpenAI-compatible), model, API key, API base URL (local engines), creativity (temperature), max response length, and **Test connection**. Your installed Ollama models appear as one-click chips. |
+| **Research & RAG** | Chunk size, chunk overlap, passages per answer. |
+| **Web Research** | Search engine (DuckDuckGo, Brave or Google via Serper), keys, and your trusted-source list. |
 | **Data** | Export the binder, or reset settings to their defaults (your content is kept). |
 
 ### Choosing RAG parameters
@@ -232,11 +235,17 @@ Everything is saved automatically to your local database.
 - **Chunk size:** smaller chunks (600–900 characters) give more precise citations. Larger chunks (1500–2500) give each passage more context. The default of 1200 works well for UN documents.
 - **Overlap:** keeps sentences that fall on a chunk boundary from being lost. About 15% of the chunk size is a good rule of thumb.
 - **Passages per answer:** more passages give broader answers but make them slower on small local models. Use 4–8.
-- After changing any of these, or the embedding model, click **Re-index all documents**.
+- Changes apply to your next question. There's nothing to re-index.
 
 ### Local vs. cloud
 
-With **Ollama**, nothing leaves your Mac. With a cloud provider, the text of each request (including the document passages it retrieves) is sent to that provider. Your API key is stored locally and only ever shown masked (`••••1234`).
+With a **cloud provider**, the text of each request (including the document passages it retrieves) is sent to that provider through Envoy's relay. Your key is stored privately in your account; only you can read it.
+
+With **Ollama on this computer**, your browser talks to the model directly and nothing leaves your machine, even on the hosted site. One-time setup:
+
+1. Install [Ollama](https://ollama.com) and run `ollama pull llama3.2`.
+2. Quit the Ollama app, then start it with your Envoy site allowed: `OLLAMA_ORIGINS="https://your-envoy-site" ollama serve`.
+3. In Settings → AI Engine, choose **Ollama (on this computer)** and pick a model chip.
 
 ## Keyboard Shortcuts
 
@@ -250,8 +259,9 @@ With **Ollama**, nothing leaves your Mac. With a cloud provider, the text of eac
 
 ## Troubleshooting
 
-- **Red status light, "Ollama not running":** open the Ollama app or run `ollama serve`.
-- **"Model not installed":** run `ollama pull llama3.2`, or choose an installed model in Settings.
-- **Uploads fail with an embedding error:** run `ollama pull nomic-embed-text`.
-- **Slow answers:** use a smaller model, lower "Passages per answer", or lower "Max response length".
-- **"Backend offline":** make sure `npm run dev` is still running in your terminal.
+- **Red status light, "Add an API key":** paste a key in Settings → AI Engine.
+- **"Local model not reachable":** start Ollama with `OLLAMA_ORIGINS` set to your site (see [Local vs. cloud](#local-vs-cloud)), and check `ollama pull llama3.2` finished.
+- **"The cloud provider rejected the API key":** re-copy the key, and check that the model name matches the provider.
+- **Web research says DuckDuckGo is rate limited:** wait a minute, or add a free Brave or Serper key in Settings → Web Research.
+- **"You don't have access to this workspace any more":** the owner made a new code or removed you. Ask them for a fresh invite.
+- **Slow answers:** use a faster model (Groq is very fast), lower "Passages per answer", or lower "Max response length".

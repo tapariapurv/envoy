@@ -31,7 +31,7 @@ const DEFAULTS: Record<string, Record<string, unknown>> = {
   motions: { text: "", theme: "", info: "" },
 };
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O/1/I confusion
-const MAX_DOC = 900_000; // Firestore documents cap at 1 MiB
+const MAX_DOC = 250_000; // Firestore caps documents at 1 MiB; 4 bytes/char worst case
 
 export class ApiError extends Error { constructor(public status: number, msg: string) { super(msg); } }
 type Row = Record<string, unknown> & { id: string };
@@ -49,15 +49,20 @@ const store = (k: string, v?: string | null) => {
 };
 export const session = { get ws() { return store("envoy-ws"); }, setWs: (id: string) => store("envoy-ws", id) };
 
-let cache: { uid: string; list: Row[] } | null = null;
+const TTL = 30_000; // teammates' edits (profile, new documents) show up within this window
+let cache: { uid: string; list: Row[]; at: number } | null = null;
+let loading: Promise<Row[]> | null = null; // one in-flight load, so parallel callers can't each create a first workspace
 async function myWorkspaces(fresh = false): Promise<Row[]> {
   const u = uid();
-  if (!fresh && cache?.uid === u) return cache.list;
-  let list = (await getDocs(query(collection(db, "workspaces"), where("members", "array-contains", u)))).docs.map((d) => ({ ...d.data(), id: d.id }) as Row);
-  if (!list.length) { await createWorkspace({ name: "My first conference", kind: "mun" }); return myWorkspaces(true); }
-  list = list.sort(by("created", true)).map((w) => ({ ...w, guest: w.owner !== u }));
-  cache = { uid: u, list };
-  return list;
+  if (!fresh && cache?.uid === u && Date.now() - cache.at < TTL) return cache.list;
+  return (loading ??= (async () => {
+    const get = async () => (await getDocs(query(collection(db, "workspaces"), where("members", "array-contains", u)))).docs.map((d) => ({ ...d.data(), id: d.id }) as Row);
+    let list = await get();
+    if (!list.length) { await createWorkspace({ name: "My first conference", kind: "mun" }); list = await get(); }
+    list = list.sort(by("created", true)).map((w) => ({ ...w, guest: w.owner !== u }));
+    cache = { uid: u, list, at: Date.now() };
+    return list;
+  })().finally(() => { loading = null; }));
 }
 async function current(): Promise<Row> {
   const list = await myWorkspaces();
@@ -122,7 +127,7 @@ export async function join(code: string) {
 // ---------- settings ----------
 async function getSettings() {
   const [u, w] = [await getDoc(doc(db, "users", uid())), await current()];
-  if (!u.data()?.seeded) await seedUser();
+  if (!u.data()?.seeded) await (seeding ??= seedUser().finally(() => { seeding = null; }));
   return { ...DEFAULT_SETTINGS, ...(u.data()?.settings ?? {}), ...pick(w, [...PROFILE, "kind"]) };
 }
 async function putSettings(body: Record<string, unknown>) {
@@ -134,10 +139,11 @@ async function putSettings(body: Record<string, unknown>) {
 }
 
 /** First sign-in: copy the clause bank, procedure cards and motion bank into the user's own collections. */
+let seeding: Promise<void> | null = null;
 async function seedUser() {
   const u = uid(), b = writeBatch(db);
-  for (const k of PERSONAL) for (const [i, x] of (seed as unknown as Record<string, object[]>)[k].entries())
-    b.set(doc(collection(db, "users", u, k)), { ...DEFAULTS[k], ...x, created: `${now()}-${String(i).padStart(3, "0")}` });
+  for (const k of PERSONAL) for (const [i, x] of (seed as unknown as Record<string, object[]>)[k].entries()) // fixed ids: a repeat run overwrites, never duplicates
+    b.set(doc(db, "users", u, k, `seed-${String(i).padStart(3, "0")}`), { ...DEFAULTS[k], ...x, created: `${now()}-${String(i).padStart(3, "0")}` });
   b.set(doc(db, "users", u), { seeded: true }, { merge: true });
   await b.commit();
 }
@@ -162,11 +168,11 @@ async function uploadDocs(fd: FormData) {
   return out;
 }
 
-let docsCache: { ws: string; docs: Row[] } | null = null;
+let docsCache: { ws: string; docs: Row[]; at: number } | null = null;
 /** Every document in the active workspace, with text (used by Research Hub search). */
 export async function workspaceDocs(): Promise<Row[]> {
   const w = (await current()).id;
-  if (docsCache?.ws !== w) docsCache = { ws: w, docs: await rows(["workspaces", w, "documents"]) };
+  if (docsCache?.ws !== w || Date.now() - docsCache.at > TTL) docsCache = { ws: w, docs: await rows(["workspaces", w, "documents"]), at: Date.now() };
   return docsCache.docs;
 }
 
