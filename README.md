@@ -4,7 +4,7 @@
 
 Envoy is a web app for Model UN delegates and debaters. It has a task board and committee timers, a research vault you can chat with (answers cite their sources), cited web research briefs, an AI drafting studio with Word export, an opponent simulator, debate prep (flow, sparring, timers), procedure flashcards, a paced teleprompter, and a one-file offline binder.
 
-Sign in with Google and you're ready. Each conference or tournament gets its own workspace, which you can share with your team using an access code or an emailed invite link. AI runs on **your own API key** (Google Gemini and Groq have free tiers). Envoy can also use a model **running on your own computer** through [Ollama](https://ollama.com): the browser calls `localhost:11434` directly, so this works even on the hosted site.
+**Live:** [envoy-cyan.vercel.app](https://envoy-cyan.vercel.app). Sign in with Google and you're ready. Each conference or tournament gets its own workspace, which you can share with your team using an access code or an emailed invite link. AI runs on **your own API key** (Google Gemini and Groq have free tiers). Envoy can also use a model **running on your own computer** through [Ollama](https://ollama.com): the browser calls `localhost:11434` directly, so this works even on the hosted site.
 
 | Layer | Tech | Cost |
 |---|---|---|

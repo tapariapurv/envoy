@@ -2,7 +2,8 @@
 import { auth } from "./firebase";
 
 /** Invite emails go through a Google Apps Script web app (apps-script/Code.gs), sent from the deployer's Gmail. */
-const URL_ = process.env.NEXT_PUBLIC_MAIL_URL;
+// Public URL; the script only mails invites for real codes that link to APP_ORIGIN, so forks should set their own.
+const URL_ = process.env.NEXT_PUBLIC_MAIL_URL || "https://script.google.com/macros/s/AKfycbysI0bdTUKbH7WqIgiXEjkjOgwKU2p5V07FTqCmaon5d4Mw9YvTUE2D7ryAfEIJ8Fga/exec";
 export const canEmail = !!URL_;
 
 export async function sendInvite(to: string, workspace: string, code: string, link: string) {
